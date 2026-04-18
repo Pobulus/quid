@@ -7,6 +7,15 @@ from __future__ import annotations
 
 SCHEMA_VERSION = 1
 
+# Calendar: months are 28 days, day 1 is Monday.
+MONTH_LEN = 28
+WORKDAYS_PER_MONTH = 20  # 4 weeks × 5 weekdays
+
+# Seeded calendar events (relative to each month).
+PAYDAY_DAY = 28  # last day of month — pays for the work just completed
+RENT_DUE_DAY = 5
+HEATING_DUE_DAY = 10
+
 # Stat / skill bounds
 STAT_MAX = 100
 SKILL_MAX = 10
@@ -67,6 +76,20 @@ TAX_RATE = 0.22
 STARTING_STAT = 70
 STARTING_SKILL = 1
 STARTING_CREDIT_SCORE = 600
+
+# ---- Food -----------------------------------------------------------------------
+
+# Three tiers of food spend. `cost` is grosze per month.
+# `daily_hunger` = how much hunger is restored each day tick (offsets decay).
+# Stat deltas are applied once at month rollover (clamped to 0..100).
+FOOD_TIERS = {
+    "cheap":   {"cost": 30000,  "daily_hunger": 3, "health": -2, "sanity": -1, "energy":  0},
+    "normal":  {"cost": 60000,  "daily_hunger": 4, "health":  0, "sanity":  0, "energy":  1},
+    "premium": {"cost": 120000, "daily_hunger": 5, "health":  2, "sanity":  2, "energy":  2},
+}
+FOOD_TIER_ORDER = ("cheap", "normal", "premium")
+FOOD_DEFAULT_TIER = "normal"
+COOKING_SHIFT_DIVISOR = 4  # +1 effective tier per 4 cooking levels
 
 # ---- Houses ---------------------------------------------------------------------
 

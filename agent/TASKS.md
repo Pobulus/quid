@@ -63,9 +63,9 @@ Everyone needs to agree on this shape before splitting off. Dataclass names, fie
 GameState:
   schema_version: int               # 1
   seed: int                         # for client-side d20 rolls
-  day: int                          # 1..30, resets each month
+  day: int                          # 1..28, resets each month (months are 28 days, day 1 = Monday)
   month: int                        # 1..N, starts at 1
-  day_of_week: int                  # 0=Mon .. 6=Sun
+  day_of_week: int                  # 0=Mon .. 6=Sun; each month begins on Monday
   actions_today: int                # 0 or 1
 
   player: Player
