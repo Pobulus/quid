@@ -286,7 +286,10 @@
                   </div>
 
                   <template x-if="inboxSorted.length === 0">
-                    <p class="dim text-sm">No messages yet. Try "advance until event" from Home.</p>
+                    <div class="col g-6">
+                      <p class="dim text-sm">No messages yet. Try "advance until event" from Home.</p>
+                      <button class="btn-q mag" @click="summonEvent()">Summon event now</button>
+                    </div>
                   </template>
 
                   <template x-for="ref in inboxSorted" :key="ref.event_id">
@@ -352,17 +355,22 @@
                     <div class="card col g-6 items-center text-center roll-result">
                       <span class="pixel text-xs dim">ROLL</span>
                       <span class="pixel text-3xl"
-                            :class="lastResolution.passed ? 'flash-pass' : 'flash-fail'"
-                            x-text="lastResolution.rolled"></span>
-                      <span class="text-xs dim"
-                            x-text="lastResolution.dc ? ('vs DC ' + lastResolution.dc) : 'no check'"></span>
+                            :class="lastResolution?.passed ? 'flash-pass' : 'flash-fail'"
+                            x-text="lastResolution?.rolled"></span>
+                      <template x-if="lastResolution?.skill">
+                        <span class="text-xs dim"
+                              x-text="'+ ' + lastResolution?.skillValue + ' ' + lastResolution?.skill + ' = ' + lastResolution?.total + ' vs DC ' + lastResolution?.dc"></span>
+                      </template>
+                      <template x-if="!lastResolution?.skill">
+                        <span class="text-xs dim">no check</span>
+                      </template>
                       <span class="pixel text-sm"
-                            :class="lastResolution.passed ? 'flash-pass' : 'flash-fail'"
-                            x-text="lastResolution.passed ? 'SUCCESS' : 'FAILURE'"></span>
+                            :class="lastResolution?.passed ? 'flash-pass' : 'flash-fail'"
+                            x-text="lastResolution?.passed ? 'SUCCESS' : 'FAILURE'"></span>
 
-                      <div class="col g-4 w-full mt-2" x-show="lastResolution.effects && Object.keys(lastResolution.effects).length">
+                      <div class="col g-4 w-full mt-2" x-show="lastResolution?.effects && Object.keys(lastResolution.effects).length">
                         <span class="sub-h">Effects</span>
-                        <template x-for="fx in Object.entries(lastResolution.effects || {})" :key="fx[0]">
+                        <template x-for="fx in Object.entries(lastResolution?.effects || {})" :key="fx[0]">
                           <div class="row text-sm">
                             <span class="capitalize" x-text="fx[0]"></span>
                             <span :class="fx[1] >= 0 ? 'neon' : 'text-[color:var(--danger)]'"
@@ -371,7 +379,7 @@
                         </template>
                       </div>
 
-                      <template x-if="lastResolution.local">
+                      <template x-if="lastResolution?.local">
                         <span class="text-[10px] dim">local resolution — /api/event/resolve not wired yet</span>
                       </template>
 
