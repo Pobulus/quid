@@ -309,11 +309,16 @@ body {
 }
 
 .locked::after {
-  content: "🔒";
+  content: "";
   position: absolute;
   top: 8px;
   right: 10px;
-  font-size: 12px;
+  width: 12px;
+  height: 12px;
+  background-image: url("/static/img/icon_lock.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 /* ---- Game over overlay ---- */
