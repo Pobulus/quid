@@ -219,17 +219,14 @@ class SageTest(TestCase):
         self.assertEqual(out["title"], "Test event")
         self.assertNotIn("event_id", out)
 
-    def test_validate_batch_assigns_uuid_event_id(self):
-        batch = sage._validate_batch([_valid_event(), _valid_event(title="Second")])
-        self.assertEqual(len(batch), 2)
-        for ev in batch:
-            self.assertIn("event_id", ev)
-            self.assertEqual(len(ev["event_id"]), 32)
-        self.assertNotEqual(batch[0]["event_id"], batch[1]["event_id"])
+    def test_validate_single_assigns_uuid_event_id(self):
+        ev = sage._validate_single(_valid_event())
+        self.assertIn("event_id", ev)
+        self.assertEqual(len(ev["event_id"]), 32)
 
-    def test_validate_batch_rejects_non_list(self):
+    def test_validate_single_rejects_non_object(self):
         with self.assertRaises(ValueError):
-            sage._validate_batch({"not": "a list"})
+            sage._validate_single([_valid_event()])
 
     def test_resolve_event_raises_when_already_resolved(self):
         s = new_game(seed=1)
@@ -277,21 +274,33 @@ class SageTest(TestCase):
         self.assertEqual(src, "fallback")
         self.assertIn("options", ev)
 
-    def test_generate_event_via_llm_caches_batch_remainder(self):
+    def test_generate_event_via_llm_drains_prefetch_queue(self):
         s = new_game(seed=1)
-        batch = [_valid_event(title=f"E{i}") for i in range(3)]
+        queued = _valid_event(title="Queued")
+        queued["event_id"] = "pre_1"
+        s.flags["event_queue"] = [queued, _valid_event(title="Queued2")]
 
-        def fake_call(system, user):
-            return batch
+        def fail_call(system, user):
+            raise AssertionError("should not hit LLM when queue has items")
 
         with patch.object(sage, "OLLAMA_AVAILABLE", True):
-            ev1, src1 = sage.generate_event_via_llm(s, fake_call)
-            self.assertEqual(src1, "llm")
-            self.assertEqual(len(s.flags.get("event_queue", [])), 2)
-            ev2, src2 = sage.generate_event_via_llm(s, fake_call)
-            self.assertEqual(src2, "llm_queue")
-            self.assertEqual(len(s.flags.get("event_queue", [])), 1)
-            self.assertNotEqual(ev1["event_id"], ev2["event_id"])
+            ev, src = sage.generate_event_via_llm(s, fail_call)
+        self.assertEqual(src, "llm_queue")
+        self.assertEqual(ev["event_id"], "pre_1")
+        self.assertEqual(len(s.flags["event_queue"]), 1)
+
+    def test_generate_single_event_via_llm_returns_one(self):
+        s = new_game(seed=1)
+
+        def fake_call(system, user):
+            return _valid_event(title="Solo")
+
+        with patch.object(sage, "OLLAMA_AVAILABLE", True):
+            ev, src = sage.generate_single_event_via_llm(s, fake_call)
+        self.assertEqual(src, "llm")
+        self.assertEqual(ev["title"], "Solo")
+        self.assertIn("event_id", ev)
+        self.assertEqual(s.flags.get("event_queue", []), [])
 
     def test_generate_event_via_llm_retries_then_falls_back(self):
         s = new_game(seed=1)
@@ -299,7 +308,7 @@ class SageTest(TestCase):
 
         def bad_call(system, user):
             calls["n"] += 1
-            return [{"title": "bad", "sender": "x", "body": "y", "options": []}]
+            return {"title": "bad", "sender": "x", "body": "y", "options": []}
 
         with patch.object(sage, "OLLAMA_AVAILABLE", True):
             ev, src = sage.generate_event_via_llm(s, bad_call)

@@ -5,6 +5,7 @@
 
 const SCHEMA_VERSION = 1;
 const STORAGE_KEY = "quid.state.v1";
+const PREFETCH_TARGET = 3;  // keep at least this many pre-generated events buffered
 
 // Mirror of balance.UNLOCK_TIERS — [min_credit_score|null, min_net_worth_grosze|null].
 // Keep in sync if balance.py changes; Phase 2 may replace with a server call.
@@ -143,6 +144,7 @@ function quid() {
     dayPulseTimer: null,
     dayAdvanceAnim: null,     // { from: {day,month,dow}, to: {day,month,dow} } while popup is up
     dayAdvanceTimer: null,
+    prefetching: false,       // guard: only one /api/sage/prefetch in flight at a time
 
     statList: ["health","hunger","sanity","energy"].map(k => ({ key: k, icon: STAT_ICONS[k] })),
     skillList: ["cooking","handiwork","charisma","physique"].map(k => ({ key: k, icon: SKILL_ICONS[k] })),
@@ -156,6 +158,7 @@ function quid() {
           const parsed = JSON.parse(cached);
           if (parsed.schema_version === SCHEMA_VERSION) {
             this.state = parsed;
+            this.prefetchEvent();
             return;
           }
           this.showToast("Incompatible save — starting new game.");
@@ -176,6 +179,7 @@ function quid() {
       this.lastResolution = null;
       this.activeApp = "home";
       this.save();
+      this.prefetchEvent();
     },
 
     async newDemoGame() {
@@ -191,6 +195,7 @@ function quid() {
       this.activeApp = "home";
       this.save();
       this.showToast("Demo run loaded. Check the Email app.");
+      this.prefetchEvent();
     },
 
     async loadFakeState() {
@@ -360,6 +365,40 @@ function quid() {
       }
     },
 
+    // Keep the local event queue topped up. Fires one background LLM call
+    // at a time; server returns {event} only, we splice it into our queue.
+    // Endpoint is slow (single-event Ollama generation), so we never block the
+    // UI on it — errors are swallowed and retried next tick.
+    async prefetchEvent() {
+      if (!this.state || this.prefetching) return;
+      const queue = (this.state.flags && this.state.flags.event_queue) || [];
+      if (queue.length >= PREFETCH_TARGET) return;
+      this.prefetching = true;
+      try {
+        const r = await fetch("/api/sage/prefetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: this.state }),
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data || !data.event) return;
+        if (!this.state) return;
+        if (!this.state.flags) this.state.flags = {};
+        const q = this.state.flags.event_queue || [];
+        q.push(data.event);
+        this.state.flags.event_queue = q;
+        this.save();
+        if ((this.state.flags.event_queue.length) < PREFETCH_TARGET) {
+          setTimeout(() => this.prefetchEvent(), 0);
+        }
+      } catch (_) {
+        // network errors are fine — the queue just doesn't fill this round
+      } finally {
+        this.prefetching = false;
+      }
+    },
+
     dateSnapshot() {
       if (!this.state) return null;
       return { day: this.state.day, month: this.state.month, dow: this.state.day_of_week };
@@ -396,6 +435,7 @@ function quid() {
     },
     async advanceUntilEvent() {
       const before = this.dateSnapshot();
+      this.prefetchEvent();
       const data = await this.postAction("/api/advance-until-event");
       if (data && data.reason === "budget_required") {
         this.triggerDayAdvanceAnim(before);
@@ -409,6 +449,7 @@ function quid() {
         this.openEventId = data.event.event_id;
         this.lastResolution = null;
         this.showToast("A new event arrived.");
+        this.prefetchEvent();
         return;
       }
       if (data.reason === "calendar_event") {
@@ -427,6 +468,7 @@ function quid() {
       if (data && data.event) {
         this.openEventId = data.event.event_id;
         this.lastResolution = null;
+        this.prefetchEvent();
       }
     },
     async rest()              { await this.postAction("/api/rest"); },
@@ -477,6 +519,7 @@ function quid() {
       ev.resolution = this.lastResolution;
       this.save();
       this.rollingEventId = null;
+      this.prefetchEvent();
     },
 
     // ---- budget modal ----
