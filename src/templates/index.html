@@ -148,7 +148,7 @@
 
                 <div class="row mt-2 g-6" style="gap:6px">
                   <button class="btn-q muted" style="flex:1" @click="showToast('Transfer UI — Phase 2.')">Transfer</button>
-                  <button class="btn-q muted" style="flex:1" @click="showToast('Budget modal — Phase 2.')">Set budget</button>
+                  <button class="btn-q muted" style="flex:1" @click="openBudgetModal()">Set budget</button>
                 </div>
               </div>
 
@@ -404,6 +404,66 @@
           <!-- ===== toast ===== -->
           <template x-if="toast">
             <div class="toast" x-text="toast"></div>
+          </template>
+
+          <!-- ===== budget modal ===== -->
+          <template x-if="budgetModalOpen">
+            <div class="modal-overlay" @click.self="closeBudgetModal()">
+              <div class="modal-panel col g-8">
+                <div class="row">
+                  <span class="sub-h">Set budget</span>
+                  <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          @click="closeBudgetModal()">Close</button>
+                </div>
+
+                <div class="col g-6">
+                  <span class="text-xs dim">Food tier</span>
+                  <template x-for="key in foodTierOrder()" :key="key">
+                    <label class="option-card"
+                           :class="budgetDraft.food_tier === key ? 'selected' : ''"
+                           style="cursor:pointer; display:block;">
+                      <div class="row">
+                        <div class="row g-4" style="gap:6px">
+                          <input type="radio" name="food_tier"
+                                 :value="key" x-model="budgetDraft.food_tier" />
+                          <span class="text-sm capitalize" x-text="key"></span>
+                        </div>
+                        <span class="pill gold" x-text="moneyBig(foodTier(key).cost) + ' / mo'"></span>
+                      </div>
+                      <div class="row text-xs dim mt-1" style="flex-wrap:wrap; gap:8px;">
+                        <span style="display:inline-flex; align-items:center; gap:4px;" class="neon">
+                          <img :src="statIcon('hunger')" class="stat-icon" alt="hunger" />
+                          <span x-text="'+' + foodTier(key).daily_hunger + '/day'"></span>
+                        </span>
+                        <template x-for="stat in ['health','sanity','energy']" :key="stat">
+                          <span style="display:inline-flex; align-items:center; gap:4px;"
+                                :class="foodTier(key)[stat] > 0 ? 'neon' : (foodTier(key)[stat] < 0 ? 'text-[color:var(--danger)]' : 'dim')">
+                            <img :src="statIcon(stat)" class="stat-icon" :alt="stat" />
+                            <span x-text="(foodTier(key)[stat] >= 0 ? '+' : '') + foodTier(key)[stat]"></span>
+                          </span>
+                        </template>
+                      </div>
+                    </label>
+                  </template>
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim">Leisure (PLN, cosmetic)</span>
+                  <input type="number" min="0" class="budget-input"
+                         x-model.number="budgetDraft.leisure" />
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim">Bills buffer (PLN, cosmetic)</span>
+                  <input type="number" min="0" class="budget-input"
+                         x-model.number="budgetDraft.bills_buffer" />
+                </div>
+
+                <button class="btn-q mag" :disabled="budgetSaving" @click="saveBudget()">
+                  <span x-text="budgetSaving ? 'Saving…' : 'Save budget'"></span>
+                </button>
+              </div>
+            </div>
           </template>
 
           <!-- ===== game over ===== -->
