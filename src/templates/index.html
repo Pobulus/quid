@@ -409,8 +409,9 @@
             <div class="modal-overlay" @click.self="closeBudgetModal()">
               <div class="modal-panel col g-8">
                 <div class="row">
-                  <span class="sub-h">Set budget</span>
+                  <span class="sub-h" x-text="budgetModalRequired ? 'Set budget — required' : 'Set budget'"></span>
                   <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          x-show="!budgetModalRequired"
                           @click="closeBudgetModal()">Close</button>
                 </div>
 

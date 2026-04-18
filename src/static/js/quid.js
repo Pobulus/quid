@@ -136,6 +136,7 @@ function quid() {
     lastResolution: null,     // { option_id, rolled, dc, passed, effects }
     rollingEventId: null,     // while animating
     budgetModalOpen: false,
+    budgetModalRequired: false,   // true when server gated on budget_required — modal can't be dismissed
     budgetDraft: { food_tier: FOOD_DEFAULT_TIER, leisure: 0, bills_buffer: 0 },
     budgetSaving: false,
     dayPulse: false,
@@ -386,12 +387,21 @@ function quid() {
 
     async advanceDay() {
       const before = this.dateSnapshot();
-      await this.postAction("/api/advance-day");
+      const data = await this.postAction("/api/advance-day");
+      if (data && data.reason === "budget_required") {
+        this.openRequiredBudgetModal();
+        return;
+      }
       this.triggerDayAdvanceAnim(before);
     },
     async advanceUntilEvent() {
       const before = this.dateSnapshot();
       const data = await this.postAction("/api/advance-until-event");
+      if (data && data.reason === "budget_required") {
+        this.triggerDayAdvanceAnim(before);
+        this.openRequiredBudgetModal();
+        return;
+      }
       this.triggerDayAdvanceAnim(before);
       if (!data) return;
       if (data.event) {
@@ -490,8 +500,16 @@ function quid() {
       this.budgetModalOpen = true;
     },
 
+    openRequiredBudgetModal() {
+      this.activeApp = "bank";
+      this.openBudgetModal();
+      this.budgetModalRequired = true;
+      this.showToast("Set a budget for the new month to continue.");
+    },
+
     closeBudgetModal() {
       if (this.budgetSaving) return;
+      if (this.budgetModalRequired) return;
       this.budgetModalOpen = false;
     },
 
@@ -508,6 +526,7 @@ function quid() {
       this.budgetSaving = false;
       if (data) {
         this.budgetModalOpen = false;
+        this.budgetModalRequired = false;
         this.showToast(data.message || "Budget saved.");
       }
     },
