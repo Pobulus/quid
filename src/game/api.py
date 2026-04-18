@@ -91,13 +91,18 @@ def sage_event(request, payload: dict = Body(...)):
 @api.post("/event/resolve")
 def event_resolve(request, payload: dict = Body(...)):
     state = GameState.from_dict(payload["state"])
+    event_id = payload["event_id"]
+    option_id = payload["option_id"]
     try:
-        resolution = sage.resolve_event(
-            state,
-            event_id=payload["event_id"],
-            option_id=payload["option_id"],
-            roll_d20=int(payload["roll_d20"]),
-        )
+        if event_id.startswith("cal_"):
+            resolution = events.resolve_calendar_event(state, event_id, option_id)
+        else:
+            resolution = sage.resolve_event(
+                state,
+                event_id=event_id,
+                option_id=option_id,
+                roll_d20=int(payload["roll_d20"]),
+            )
     except ValueError as e:
         return {"error": str(e)}, 400
     return {"state": state.to_dict(), "resolution": resolution}

@@ -351,6 +351,8 @@ Click "advance until event" → server loops day ticks → probability check →
 
 **Owner:** Track A. Replace the informational-only inbox entry from T2.6 MVP with a real player-actionable one. When `_fire_loan_due` records a miss, push a synthetic event with 4 options: **pay now** (retry `make_loan_payment`), **pay from savings** (shuffle from savings, then pay), **take a payday loan to cover** (`finance.take_loan("payday", …)` + pay), **let it slide** (credit_score −15, sanity −5). Route resolution via `events.resolve_calendar_event(state, event_id, option_id)` — dispatched from `/api/event/resolve` by `cal_*` event-id prefix. `event_id` pattern `cal_loan_due_{month}_{day}_{loan_index}` carries the loan index for the resolver; d20 is ignored for calendar events. No schema change. Option effect dicts are display-only previews; real side effects live in the resolver. Expand `game/tests.py` with one test per option branch. UI template unchanged (inbox already iterates `options`). Full plan: [`agent/reports/t2.7-interactive-loan-inbox.md`](reports/t2.7-interactive-loan-inbox.md).
 
+**Status:** shipped on branch `t2_6_interactive` — 4-option synthetic event, `events.resolve_calendar_event` resolver, api.py dispatches `cal_*` to it. 6 new tests (`InteractiveLoanInboxTest`) cover every option branch and pay-now retry success. `manage.py test game.tests` → 9/9 green.
+
 ### T2.4 — Unlock tiers gate the UI
 
 Bank app reads `available_products(state)` and renders each product as active, lockable (not yet met), or locked-visible (shown as preview with requirement). Both credit score and net worth factor in. Investment tab shows “unlocks at credit score 750 + 20,000 PLN net worth”.

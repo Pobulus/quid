@@ -81,6 +81,10 @@ def _fire_loan_due(state: GameState, ev) -> str:
     if "MISSED" in msg:
         loan = state.loans[loan_index]
         event_id = f"cal_loan_due_{ev.month}_{ev.day}_{loan_index}"
+        # Dedup: skip if the same synthetic entry is already pending.
+        if any(r.event_id == event_id and r.status != "resolved" for r in state.inbox):
+            return msg
+        pay = loan.monthly_payment
         state.inbox.append(
             EventRef(
                 event_id=event_id,
@@ -90,16 +94,160 @@ def _fire_loan_due(state: GameState, ev) -> str:
                 event={
                     "slug": f"cal_loan_due_m{ev.month}",
                     "sender": "Bank",
-                    "title": f"Missed {loan.kind} loan payment",
+                    "title": f"Missed {loan.kind} loan payment — action required",
                     "body": (
-                        f"Your {loan.kind} loan payment of {loan.monthly_payment/100:.2f} PLN "
-                        "was missed due to insufficient funds. This will hurt your credit score."
+                        f"Your {loan.kind} loan payment of **{pay/100:.2f} PLN** was missed "
+                        "due to insufficient funds. Pick a way out before it hurts your score further."
                     ),
-                    "options": [],
+                    "options": [
+                        {
+                            "id": "opt_pay_now",
+                            "label": "Pay from checking",
+                            "skill_check": None,
+                            "hint": "Retry from checking. Only works if cash has arrived.",
+                            "effects_on_success": {"money": -pay},
+                            "effects_on_failure": {"money": -pay},
+                        },
+                        {
+                            "id": "opt_from_savings",
+                            "label": "Transfer from savings",
+                            "skill_check": None,
+                            "hint": "Raid the emergency fund to cover the shortfall.",
+                            "effects_on_success": {"money": 0},
+                            "effects_on_failure": {"money": 0},
+                        },
+                        {
+                            "id": "opt_payday_loan",
+                            "label": "Take a payday loan to cover",
+                            "skill_check": None,
+                            "hint": "Predatory APR. Genuinely bad idea.",
+                            "effects_on_success": {},
+                            "effects_on_failure": {},
+                        },
+                        {
+                            "id": "opt_skip",
+                            "label": "Let it slide",
+                            "skill_check": None,
+                            "hint": "Credit score and sanity both take a hit.",
+                            "effects_on_success": {"credit_score": -15, "sanity": -5},
+                            "effects_on_failure": {"credit_score": -15, "sanity": -5},
+                        },
+                    ],
                 },
             )
         )
     return msg
+
+
+# ---- Calendar event resolver ---------------------------------------------------
+
+
+def _parse_loan_due_event_id(event_id: str) -> tuple[int, int, int] | None:
+    """Parse `cal_loan_due_{month}_{day}_{loan_index}`; return None on mismatch."""
+    prefix = "cal_loan_due_"
+    if not event_id.startswith(prefix):
+        return None
+    try:
+        month_s, day_s, idx_s = event_id[len(prefix):].split("_")
+        return int(month_s), int(day_s), int(idx_s)
+    except ValueError:
+        return None
+
+
+def _no_check_result(passed: bool, effects_applied: dict, note: str = "") -> dict:
+    """Shape compatible with Track C's resolution panel for null skill-check events."""
+    return {
+        "rolled": None,
+        "skill": None,
+        "skill_value": None,
+        "dc": None,
+        "total": None,
+        "passed": passed,
+        "effects_applied": effects_applied,
+        "note": note,
+    }
+
+
+def resolve_calendar_event(state: GameState, event_id: str, option_id: str) -> dict:
+    """Resolve a synthetic `cal_*` inbox entry. No d20 roll.
+
+    Currently only loan_due synthetic entries exist. Returns a resolution dict
+    shaped like `sage.resolve_event`'s output so the UI renders uniformly.
+    Raises ValueError on unknown event/option.
+    """
+    ref = next((r for r in state.inbox if r.event_id == event_id), None)
+    if ref is None:
+        raise ValueError(f"event_id not in inbox: {event_id}")
+    if ref.status == "resolved":
+        raise ValueError(f"event already resolved: {event_id}")
+
+    parsed = _parse_loan_due_event_id(event_id)
+    if parsed is None:
+        raise ValueError(f"unsupported calendar event_id: {event_id}")
+    _month, _day, loan_index = parsed
+
+    if loan_index < 0 or loan_index >= len(state.loans):
+        ref.status = "resolved"
+        return _no_check_result(True, {}, note="loan no longer exists")
+
+    loan = state.loans[loan_index]
+    if loan.remaining <= 0:
+        ref.status = "resolved"
+        return _no_check_result(True, {}, note="loan already paid")
+
+    pay = loan.monthly_payment
+
+    if option_id == "opt_pay_now":
+        before = state.accounts.checking
+        _, msg = F.make_loan_payment(state, loan_index)
+        spent = before - state.accounts.checking
+        if "MISSED" in msg:
+            return _no_check_result(
+                False, {}, note="still couldn't pay — checking too low"
+            )
+        ref.status = "resolved"
+        return _no_check_result(True, {"money": -spent}, note=msg)
+
+    if option_id == "opt_from_savings":
+        shortfall = max(0, pay - state.accounts.checking)
+        moved = min(shortfall, state.accounts.savings)
+        state.accounts.savings -= moved
+        state.accounts.checking += moved
+        before = state.accounts.checking
+        _, msg = F.make_loan_payment(state, loan_index)
+        spent = before - state.accounts.checking
+        if "MISSED" in msg:
+            return _no_check_result(
+                False,
+                {"money": 0},
+                note=f"savings had only {moved/100:.2f} PLN — still short",
+            )
+        ref.status = "resolved"
+        return _no_check_result(
+            True,
+            {"money": -spent},
+            note=f"transferred {moved/100:.2f} PLN from savings, then paid",
+        )
+
+    if option_id == "opt_payday_loan":
+        _, take_msg = F.take_loan(state, "payday", pay)
+        before = state.accounts.checking
+        _, pay_msg = F.make_loan_payment(state, loan_index)
+        spent = before - state.accounts.checking
+        ref.status = "resolved"
+        return _no_check_result(
+            True,
+            {"money": -spent},
+            note=f"{take_msg}; {pay_msg}",
+        )
+
+    if option_id == "opt_skip":
+        from game import sage as _sage
+        applied = _sage.apply_effects(state, {"credit_score": -15, "sanity": -5})
+        ref.status = "resolved"
+        return _no_check_result(True, applied, note="Let it slide — score takes a hit")
+
+    raise ValueError(f"unknown option_id for calendar event: {option_id}")
 
 
 def _apply_calendar_event(state, ev) -> str:
