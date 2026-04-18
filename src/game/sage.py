@@ -1,19 +1,30 @@
 """SAGE — event source.
 
-Phase 1 Track B ships a *mock*: no Ollama, no prompt builder, no validator. It
-picks a random hand-written event from `events_fallback.FALLBACK_EVENTS` and
-returns it. The real LLM-backed implementation (build_prompt / call_ollama /
-validate / retry) lands later behind the same `generate_event` interface.
+Two paths share one interface:
 
-Pure-ish: takes state, returns (event_dict, EventRef-shaped dict). Mutates the
-inbox via the caller — this module never touches I/O or globals beyond the RNG.
+  * `generate_event(state)` — mock path. Picks a random event from
+    `events_fallback.FALLBACK_EVENTS`. Used by the live `/api/sage/event`
+    endpoint. No I/O, deterministic shape.
+
+  * `generate_event_via_llm(state, call_fn)` — full pipeline:
+        build_prompt → call_fn(prompt) → validate_event → (one retry) → fallback.
+    `call_fn` is injected (not implemented here — Ollama client is B2). When
+    the LLM is wired, the endpoint flips to this path; until then it lives as
+    a tested shell.
+
+Validator + prompt builder are shipped now so the contract is locked in: any
+LLM output the system later accepts must satisfy `validate_event`, and the
+prompt enforces that contract by example.
 """
 
 from __future__ import annotations
 
+import json
 import random
 import uuid
-from typing import Optional
+from typing import Any, Callable, Optional
+
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from game import balance as B
 from game.events_fallback import FALLBACK_EVENTS
@@ -176,3 +187,250 @@ def resolve_event(
         "passed": passed,
         "effects_applied": applied,
     }
+
+
+# ---- Prompt builder (B1) --------------------------------------------------------
+
+
+_SYSTEM_PROMPT = """\
+You are SAGE, the event generator for QUID — a deliberately unforgiving
+financial-literacy RPG set in modern-day Poland. Currency is PLN. Tone:
+realistic, dry, lightly cynical, educational. No fantasy, no metaphors, no
+moralising. Mundane events with real financial weight.
+
+Your job: produce ONE inbox event for the player as a single JSON object.
+No prose, no markdown fences, no commentary. JSON only.
+
+EFFECT KEYS (closed set — no others allowed):
+  health, hunger, sanity, energy, money, credit_score,
+  cooking, handiwork, charisma, physique
+
+EFFECT BOUNDS (per-option, success or failure):
+  money         : -50000 .. 50000   (grosze; 100 grosze = 1 PLN)
+  credit_score  : -25 .. 25
+  health/hunger/sanity/energy : -30 .. 30
+  cooking/handiwork/charisma/physique : -2 .. 2
+
+OPTION SHAPE (uniform — every option has the same shape):
+  {
+    "id": "a" | "b" | "c" | "d",
+    "label": "<short verb phrase>",
+    "skill_check": {"skill": "<one of cooking|handiwork|charisma|physique>",
+                    "difficulty_class": <int 5..25>}
+                    OR null,
+    "effects_on_success": {<effect_key>: <int>, ...},
+    "effects_on_failure": {<effect_key>: <int>, ...},
+    "hint": "<one short sentence the player sees before picking>"
+  }
+
+If skill_check is null, effects_on_success and effects_on_failure MUST be the
+same object (no implicit roll).
+
+EVENT SHAPE:
+  {
+    "slug": "<snake_case, 1-40 chars, NEW — not in recent_events>",
+    "title": "<inbox subject line, ~6 words>",
+    "sender": "<who the message is from>",
+    "body": "<short markdown body — paragraphs, **bold**, *italic*. No HTML.>",
+    "options": [<2..4 options>]
+  }
+
+EXAMPLE (study the shape, do not copy verbatim):
+{
+  "slug": "boiler_emergency",
+  "title": "The boiler is making a noise again",
+  "sender": "Landlord",
+  "body": "Woke up to a grinding noise. Your landlord says it's *\\"basically working\\"*.",
+  "options": [
+    {"id": "a", "label": "Fix it yourself",
+     "skill_check": {"skill": "handiwork", "difficulty_class": 12},
+     "effects_on_success": {"handiwork": 1, "sanity": -5},
+     "effects_on_failure": {"money": -25000, "sanity": -10},
+     "hint": "Handiwork DC 12. Fail = plumber call-out fee."},
+    {"id": "b", "label": "Pay a plumber",
+     "skill_check": null,
+     "effects_on_success": {"money": -30000, "sanity": -2},
+     "effects_on_failure": {"money": -30000, "sanity": -2},
+     "hint": "Safe. Costs 300 PLN."}
+  ]
+}
+
+Hard rules:
+  * Output ONE JSON object. No surrounding text. No code fences.
+  * `slug` must NOT appear in the recent_events list provided below.
+  * Every effect key must be in the closed set above.
+  * Every effect delta must be within the bounds above.
+  * Money in grosze (integer). 1 PLN = 100 grosze.
+  * The event must be plausibly tied to the player's current situation.
+"""
+
+
+def _state_slice(state: GameState) -> dict:
+    """The minimal player snapshot SAGE needs. Matches the "context" block
+    in the user prompt below."""
+    return {
+        "month": state.month,
+        "day": state.day,
+        "stats": dict(state.player.stats),
+        "skills": dict(state.player.skills),
+        "money_pln": round(state.accounts.checking / 100, 2),
+        "savings_pln": round(state.accounts.savings / 100, 2),
+        "credit_score": state.credit_score,
+        "house_tier": state.house.tier,
+        "has_credit_card": state.credit_card is not None,
+        "open_loans": [
+            {"kind": l.kind, "remaining_pln": round(l.remaining / 100, 2)}
+            for l in state.loans
+        ],
+        "recent_events": [
+            {"slug": r.slug, "days_ago": r.days_ago} for r in state.recent_events
+        ],
+    }
+
+
+def build_prompt(state: GameState) -> tuple[str, str]:
+    """Returns (system_prompt, user_prompt). Caller assembles for whichever
+    chat API. The system prompt is static; the user prompt embeds the state
+    slice as JSON."""
+    ctx = _state_slice(state)
+    user = (
+        "Generate the next event for this player.\n\n"
+        "PLAYER CONTEXT (JSON):\n"
+        f"{json.dumps(ctx, ensure_ascii=False, indent=2)}\n\n"
+        "Return one JSON event matching the schema. JSON only."
+    )
+    return _SYSTEM_PROMPT, user
+
+
+# ---- Validator (B3) -------------------------------------------------------------
+
+
+class _SkillCheck(BaseModel):
+    skill: str
+    difficulty_class: int = Field(ge=5, le=25)
+
+    @field_validator("skill")
+    @classmethod
+    def _skill_in_set(cls, v: str) -> str:
+        if v not in B.SKILL_KEYS:
+            raise ValueError(f"skill must be one of {B.SKILL_KEYS}, got {v!r}")
+        return v
+
+
+class _Option(BaseModel):
+    id: str = Field(min_length=1, max_length=2)
+    label: str = Field(min_length=1, max_length=80)
+    skill_check: Optional[_SkillCheck] = None
+    effects_on_success: dict[str, int]
+    effects_on_failure: dict[str, int]
+    hint: str = ""
+
+    @field_validator("effects_on_success", "effects_on_failure")
+    @classmethod
+    def _effects_clean(cls, v: dict[str, int]) -> dict[str, int]:
+        for k, delta in v.items():
+            if k not in B.EFFECT_KEYS:
+                raise ValueError(f"unknown effect key {k!r}; allowed: {B.EFFECT_KEYS}")
+            lo, hi = B.EFFECT_DELTA_BOUNDS.get(k, (-(10**9), 10**9))
+            if not (lo <= delta <= hi):
+                raise ValueError(f"effect {k}={delta} out of bounds [{lo}, {hi}]")
+        return v
+
+    @model_validator(mode="after")
+    def _no_check_means_equal_effects(self) -> "_Option":
+        if self.skill_check is None and self.effects_on_success != self.effects_on_failure:
+            raise ValueError(
+                "options with skill_check=null must have identical "
+                "effects_on_success and effects_on_failure"
+            )
+        return self
+
+
+class _Event(BaseModel):
+    slug: str = Field(min_length=1, max_length=40, pattern=r"^[a-z][a-z0-9_]*$")
+    title: str = Field(min_length=1, max_length=120)
+    sender: str = Field(min_length=1, max_length=60)
+    body: str = Field(min_length=1)
+    options: list[_Option] = Field(min_length=2, max_length=4)
+
+    @model_validator(mode="after")
+    def _unique_option_ids(self) -> "_Event":
+        ids = [o.id for o in self.options]
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"option ids must be unique, got {ids}")
+        return self
+
+
+def validate_event(payload: Any, recent_slugs: Optional[set[str]] = None) -> dict:
+    """Validate one LLM-produced event payload.
+
+    Raises pydantic.ValidationError on shape/bounds problems. Raises ValueError
+    if the slug repeats one in `recent_slugs` (the prompt forbids this — repeats
+    are a signal the model ignored context).
+
+    Returns the validated payload as a plain dict (suitable for storing in the
+    inbox). Does NOT add `event_id` — caller owns that.
+    """
+    event = _Event.model_validate(payload)
+    if recent_slugs and event.slug in recent_slugs:
+        raise ValueError(f"slug {event.slug!r} repeats a recent event")
+    return event.model_dump()
+
+
+# ---- LLM pipeline shell (B1+B3+B4 wired; B2 injected) ---------------------------
+
+
+CallFn = Callable[[str, str], Any]
+"""Signature for the Ollama caller (to be implemented in B2):
+    call_fn(system_prompt: str, user_prompt: str) -> dict | str
+Should return parsed JSON when the model honours `format: json`, or a raw
+string the pipeline will try to parse. Raises on transport failure."""
+
+
+def _coerce_to_dict(raw: Any) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        return json.loads(raw)
+    raise ValueError(f"call_fn returned unsupported type: {type(raw).__name__}")
+
+
+def generate_event_via_llm(
+    state: GameState,
+    call_fn: CallFn,
+    rng: Optional[random.Random] = None,
+) -> tuple[dict, str]:
+    """Full pipeline: build → call → validate → one retry → fallback.
+
+    Returns (event_dict, source) where source is "llm" | "llm_retry" | "fallback".
+    `call_fn` is injected (B2 hasn't landed). On any unrecoverable failure,
+    returns a mock event from `FALLBACK_EVENTS` so the demo never stalls.
+
+    Caller assigns `event_id` and pushes to inbox.
+    """
+    system, user = build_prompt(state)
+    recent_slugs = {r.slug for r in state.recent_events}
+
+    last_error: Optional[str] = None
+    for attempt in range(2):  # initial + one retry
+        retry_suffix = (
+            f"\n\nYour previous response was invalid:\n{last_error}\n"
+            "Return corrected JSON only — no prose."
+            if last_error
+            else ""
+        )
+        try:
+            raw = call_fn(system, user + retry_suffix)
+            payload = _coerce_to_dict(raw)
+            event = validate_event(payload, recent_slugs=recent_slugs)
+            event["event_id"] = uuid.uuid4().hex
+            return event, ("llm" if attempt == 0 else "llm_retry")
+        except (ValidationError, ValueError, json.JSONDecodeError) as e:
+            last_error = str(e)
+        except Exception as e:
+            # Transport / unknown — bail straight to fallback.
+            last_error = f"transport: {e}"
+            break
+
+    fallback = generate_event(state, rng=rng)
+    return fallback, "fallback"

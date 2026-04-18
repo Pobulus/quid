@@ -83,7 +83,7 @@ FALLBACK_EVENTS: list[dict] = [
                 "label": "Take the shift",
                 "skill_check": {"skill": "physique", "difficulty_class": 11},
                 "effects_on_success": {"money": 40000, "energy": -20, "physique": 1},
-                "effects_on_failure": {"money": 20000, "energy": -35, "health": -10},
+                "effects_on_failure": {"money": 20000, "energy": -30, "health": -10},
                 "hint": "Physique DC 11. Fail = half pay, you burn out.",
             },
             {
