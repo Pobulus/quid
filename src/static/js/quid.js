@@ -488,6 +488,46 @@ function quid() {
       a.click();
       URL.revokeObjectURL(url);
     },
+
+    triggerImport() {
+      this.$refs.importFile.click();
+    },
+
+    async importSave(evt) {
+      const file = evt.target.files && evt.target.files[0];
+      evt.target.value = "";
+      if (!file) return;
+      let parsed;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch (_) {
+        this.showToast("Import failed: not valid JSON.");
+        return;
+      }
+      if (!parsed || typeof parsed !== "object" || parsed.schema_version !== SCHEMA_VERSION) {
+        this.showToast(`Import failed: schema_version must be ${SCHEMA_VERSION}.`);
+        return;
+      }
+      // Round-trip through /api/echo to catch schema drift the client can't see.
+      try {
+        const r = await fetch("/api/echo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: parsed }),
+        });
+        if (!r.ok) { this.showToast("Import rejected by server."); return; }
+        const data = await r.json();
+        this.state = data.state;
+      } catch (_) {
+        this.showToast("Import failed: server unreachable.");
+        return;
+      }
+      this.openEventId = null;
+      this.lastResolution = null;
+      this.activeApp = "home";
+      this.save();
+      this.showToast("Save imported.");
+    },
   };
 }
 
