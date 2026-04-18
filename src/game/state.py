@@ -8,6 +8,7 @@ an integer in grosze.
 from __future__ import annotations
 
 import random
+import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Optional
 
@@ -197,14 +198,16 @@ def seed_month_calendar(month: int, rent: int, has_cc: bool) -> list[CalendarEve
     return events
 
 
-def new_game(seed: Optional[int] = None) -> GameState:
-    if seed is None:
+def new_game(seed: Optional[int] = None, demo: bool = False) -> GameState:
+    if demo:
+        seed = B.DEMO_SEED
+    elif seed is None:
         seed = random.randint(1, 2**31 - 1)
 
     house_cfg = B.HOUSE_TIERS["shoddy_rental"]
     rent = house_cfg["rent"]
     starter_drip = B.FOOD_TIERS[B.FOOD_DEFAULT_TIER]["daily_hunger"]
-    return GameState(
+    state = GameState(
         schema_version=B.SCHEMA_VERSION,
         seed=seed,
         day=1,
@@ -237,3 +240,12 @@ def new_game(seed: Optional[int] = None) -> GameState:
             "food_daily_hunger": starter_drip,
         },
     )
+
+    if demo:
+        from game.demo_script import opening_bnpl_event
+        from game.sage import push_to_inbox
+        event = opening_bnpl_event()
+        event["event_id"] = uuid.uuid4().hex
+        push_to_inbox(state, event)
+
+    return state

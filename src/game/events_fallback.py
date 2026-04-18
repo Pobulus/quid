@@ -15,7 +15,6 @@ Event schema (matches the SAGE contract):
                 "skill_check": {"skill": str, "difficulty_class": int} | None,
                 "effects_on_success": {<effect_key>: int, ...},
                 "effects_on_failure": {<effect_key>: int, ...},
-                "hint": str,
             },
             ...
         ],
@@ -48,7 +47,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": {"skill": "handiwork", "difficulty_class": 12},
                 "effects_on_success": {"handiwork": 1, "sanity": -5},
                 "effects_on_failure": {"money": -25000, "sanity": -10, "handiwork": 1},
-                "hint": "Handiwork DC 12. Fail = plumber call-out fee.",
             },
             {
                 "id": "b",
@@ -56,7 +54,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": None,
                 "effects_on_success": {"money": -30000, "sanity": -2},
                 "effects_on_failure": {"money": -30000, "sanity": -2},
-                "hint": "Safe. Costs 300 PLN.",
             },
             {
                 "id": "c",
@@ -64,7 +61,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": None,
                 "effects_on_success": {"sanity": -8, "energy": -5},
                 "effects_on_failure": {"sanity": -8, "energy": -5},
-                "hint": "No cost now. Sleep will suffer.",
             },
         ],
     },
@@ -84,7 +80,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": {"skill": "physique", "difficulty_class": 11},
                 "effects_on_success": {"money": 40000, "energy": -20, "physique": 1},
                 "effects_on_failure": {"money": 20000, "energy": -30, "health": -10},
-                "hint": "Physique DC 11. Fail = half pay, you burn out.",
             },
             {
                 "id": "b",
@@ -92,7 +87,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": {"skill": "charisma", "difficulty_class": 14},
                 "effects_on_success": {"money": 40000, "energy": -10, "charisma": 1},
                 "effects_on_failure": {"sanity": -8},
-                "hint": "Charisma DC 14. Fail = awkward, no money.",
             },
             {
                 "id": "c",
@@ -100,7 +94,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": None,
                 "effects_on_success": {"sanity": 5},
                 "effects_on_failure": {"sanity": 5},
-                "hint": "Rest now. Keep your weekend.",
             },
         ],
     },
@@ -120,7 +113,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": {"skill": "charisma", "difficulty_class": 13},
                 "effects_on_success": {"money": 0, "charisma": 1, "sanity": 3},
                 "effects_on_failure": {"money": -20000, "sanity": -5},
-                "hint": "Charisma DC 13 (reading him). Fail = he ghosts.",
             },
             {
                 "id": "b",
@@ -128,7 +120,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": None,
                 "effects_on_success": {"sanity": -3},
                 "effects_on_failure": {"sanity": -3},
-                "hint": "Keep the cash. Feels bad.",
             },
         ],
     },
@@ -148,7 +139,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": None,
                 "effects_on_success": {"sanity": 2},
                 "effects_on_failure": {"sanity": 2},
-                "hint": "Smart. Nothing happens.",
             },
             {
                 "id": "b",
@@ -156,7 +146,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": {"skill": "charisma", "difficulty_class": 15},
                 "effects_on_success": {"charisma": 1, "sanity": 5},
                 "effects_on_failure": {"money": -50000, "credit_score": -10, "sanity": -15},
-                "hint": "Charisma DC 15. Fail = you actually leak info.",
             },
             {
                 "id": "c",
@@ -164,7 +153,6 @@ FALLBACK_EVENTS: list[dict] = [
                 "skill_check": None,
                 "effects_on_success": {"money": -50000, "credit_score": -15, "sanity": -20},
                 "effects_on_failure": {"money": -50000, "credit_score": -15, "sanity": -20},
-                "hint": "Don't do this.",
             },
         ],
     },

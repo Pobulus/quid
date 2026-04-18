@@ -309,7 +309,7 @@ Four stat bars (health, hunger, sanity, energy), four skill rows with level + pr
 
 #### C5 — Email app
 
-Inbox list: sender, title, day/month, unread dot. Detail view: event body rendered as markdown (use a tiny JS markdown lib via CDN, or just `marked`), option cards below. Each option card shows: label, skill + DC if applicable, computed success probability, hint text. Click → client rolls d20 locally (using `state.seed` + deterministic advance), POSTs to `/api/event/resolve`, shows resolution animation (pass/fail flash), updates state.
+Inbox list: sender, title, day/month, unread dot. Detail view: event body rendered as markdown (use a tiny JS markdown lib via CDN, or just `marked`), option cards below. Each option card shows: label, skill + DC if applicable, and computed success probability. Click → client rolls d20 locally (using `state.seed` + deterministic advance), POSTs to `/api/event/resolve`, shows resolution animation (pass/fail flash), updates state.
 
 #### C6 — Game-over modal
 

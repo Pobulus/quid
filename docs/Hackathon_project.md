@@ -181,7 +181,7 @@ Notes on the contract:
 
 1. **Email** — displays random events and lets the player choose their response.
    - List view: sender, date (day/month), subject, and a status indicator.
-   - Detail view: event description rendered as markdown, with 2–4 response cards below. Each card shows which skill is involved (if any), a base success probability, and a hint at the potential outcome.
+   - Detail view: event description rendered as markdown, with 2–4 response cards below. Each card shows which skill is involved (if any) and a base success probability. Outcomes are revealed after the player commits — no preview spoiler.
 2. **Home management app** — shows upcoming scheduled events (payday, credit card payments, etc.) and lets the player manage the house.
 3. **Bank app** — manages all financial products (accounts, credit, debt), with graphs and budgeting tools.
 4. **Health app** — shows the player's status values (mood, calorie count, sleep quality, etc.).

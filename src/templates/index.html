@@ -348,7 +348,7 @@
                             </template>
                           </div>
                           <div class="row text-xs dim mt-1">
-                            <span x-text="opt.hint || ''"></span>
+                            <span></span>
                             <span x-text="successPct(opt) + '% success'"></span>
                           </div>
                         </div>
@@ -374,8 +374,11 @@
                             :class="lastResolution?.passed ? 'flash-pass' : 'flash-fail'"
                             x-text="lastResolution?.passed ? 'SUCCESS' : 'FAILURE'"></span>
 
-                      <div class="col g-4 w-full mt-2" x-show="lastResolution?.effects && Object.keys(lastResolution.effects).length">
-                        <span class="sub-h">Effects</span>
+                      <div class="col g-4 w-full mt-2">
+                        <span class="sub-h">What happened</span>
+                        <template x-if="!lastResolution?.effects || !Object.keys(lastResolution.effects).length">
+                          <div class="text-sm dim">Nothing changed.</div>
+                        </template>
                         <template x-for="fx in Object.entries(lastResolution?.effects || {})" :key="fx[0]">
                           <div class="row text-sm">
                             <span class="capitalize" x-text="fx[0]"></span>
@@ -444,6 +447,7 @@
   <!-- dev tools: visible in dev only; small + out of the way -->
   <div class="dev-bar">
     <button @click="newGame(true)">new game</button>
+    <button @click="newDemoGame()">demo</button>
     <button @click="loadFakeState()">load fake</button>
     <button @click="exportSave()" x-show="state">export</button>
   </div>

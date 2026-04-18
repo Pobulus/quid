@@ -7,6 +7,9 @@ from __future__ import annotations
 
 SCHEMA_VERSION = 1
 
+# Demo mode: fixed seed so the opening run is deterministic for judges.
+DEMO_SEED = 13370420
+
 # Calendar: months are 28 days, day 1 is Monday.
 MONTH_LEN = 28
 WORKDAYS_PER_MONTH = 20  # 4 weeks × 5 weekdays
