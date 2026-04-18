@@ -20,12 +20,12 @@ prompt enforces that contract by example.
 from __future__ import annotations
 
 import json
-import os
 import random
 import uuid
 from typing import Any, Callable, Optional
 
 import requests
+from django.conf import settings
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from game import balance as B
@@ -474,8 +474,8 @@ def call_ollama(system: str, user: str) -> Any:
     (list of events per _SYSTEM_PROMPT). Raises on transport or decode errors —
     `generate_event_via_llm` catches and falls back.
     """
-    host = os.getenv("OLLAMA_HOST", "").strip().rstrip("/")
-    model = os.getenv("OLLAMA_MODEL", "gemma2").strip()
+    host = settings.OLLAMA_HOST.rstrip("/")
+    model = settings.OLLAMA_MODEL
     if not host:
         raise RuntimeError("OLLAMA_HOST not set")
 
