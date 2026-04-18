@@ -93,7 +93,7 @@
                       <span x-text="calendarLabel(c.kind)"></span>
                       <span class="text-xs dim" x-text="monthName(c.month) + ' ' + c.day"></span>
                     </div>
-                    <span :class="calendarTone(c.kind)" x-text="moneyBig(c.amount)"></span>
+                    <span :class="calendarTone(c.kind)" x-text="moneyBig(calendarAmount(c)) + calendarAmountSuffix(c)"></span>
                   </div>
                 </template>
               </div>

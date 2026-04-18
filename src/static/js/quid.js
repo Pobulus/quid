@@ -237,6 +237,18 @@ function quid() {
     calendarLabel(kind) { return CALENDAR_LABELS[kind] ?? kind; },
     calendarTone(kind) { return CALENDAR_TONE[kind] ?? "pill dim"; },
 
+    // Display amount for an upcoming calendar entry. Payday entries are seeded
+    // with amount=0 because workdays aren't known yet — estimate from salary.
+    calendarAmount(c) {
+      if (c.kind === "payday" && !c.amount && this.state?.player) {
+        const { salary_gross_monthly, tax_rate } = this.state.player;
+        return Math.round(salary_gross_monthly * (1 - tax_rate));
+      }
+      return c.amount;
+    },
+
+    calendarAmountSuffix(c) { return c.kind === "payday" ? " est." : ""; },
+
     // ---- derived ----
 
     get checking() { return this.state?.accounts.checking ?? 0; },
