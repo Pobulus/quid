@@ -11,7 +11,9 @@
       "Bash(../.venv/bin/python -c \"import sys,json; s=json.load\\(sys.stdin\\); print\\('schema', s['schema_version'], 'day', s['day'], 'month', s['month'], 'checking', s['accounts']['checking']\\)\")",
       "Bash(curl -s http://localhost:8765/ -o /dev/null -w \"%{http_code}\\\\n\")",
       "Bash(curl -s http://localhost:8765/static/js/quid.js -o /dev/null -w \"%{http_code}\\\\n\")",
-      "Bash(curl -s http://localhost:8765/static/css/quid.css -o /dev/null -w \"%{http_code}\\\\n\")"
+      "Bash(curl -s http://localhost:8765/static/css/quid.css -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(../.venv/bin/python *)"
     ]
-  }
+  },
+  "prefersReducedMotion": true
 }

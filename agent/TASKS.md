@@ -419,15 +419,17 @@ When `/api/advance-day` or `/api/advance-until-event` returns `reason == "budget
 
 Currently `/api/set-budget` only stores values in `flags` — no money is deducted and no stats change.
 
-**Fix in `finance.py`:** Add `apply_monthly_budget(state)` pure function called from `events._rollover_month` (after payday, when the new month budget is available). It should:
+**Fix in `finance.py`:** Food is now charged **daily** (not monthly). `apply_daily_food(state)` is called from `events.advance_day` on every tick:
 
-1. Look up `food_tier` from `state.flags["budget"]` (default `"normal"` if not set).
-2. Charge `FOOD_TIERS[tier]["monthly_cost"]` from `state.accounts.checking`. If insufficient, walk down to cheapest affordable tier (already exists as `apply_monthly_food` logic — consolidate or reuse).
-3. Apply the one-shot stat deltas for the chosen tier (`FOOD_TIERS[tier]["health_delta"]`, etc.) clamped to stat bounds.
-4. Set `state.flags["food_daily_hunger"] = FOOD_TIERS[tier]["daily_hunger_drip"]` so the daily drip continues.
-5. Record the food expense in a new `state.flags["monthly_expenses"]` list: `[{"label": "Food (normal)", "amount": 45000}, ...]`. Rent, heating, and CC bill charges should also append here when they fire.
+1. Resolve `food_tier` from `state.flags["budget"]` (default `"normal"`). Budget can be changed mid-month — the next day tick picks up the new tier.
+2. Walk down tiers if checking can't cover today's cost. If nothing is affordable, apply cheap-tier stat penalties and skip the hunger restore (scraps day).
+3. `FOOD_TIERS[tier]["cost"]` is now **grosze per day**; stat deltas (`health`, `sanity`, `energy`) apply every day, clamped 0..100. `daily_hunger` restores hunger the same day.
+4. Aggregate today's charge into a per-tier line in `state.flags["monthly_expenses"]` via `_bump_food_expense` (one "Food (cheap)" / "Food (normal)" / "Food (premium)" line that grows). Switching tiers mid-month produces a second line.
+5. Rent, heating, CC min payment, and loan payments also append to `monthly_expenses` via `_record_expense`. `_rollover_month` resets the list so each month shows its own breakdown.
 
-**Frontend:** Home app calendar / Bank app should render `state.flags["monthly_expenses"]` as an expense breakdown list so the player can see where money went.
+The old one-shot monthly food charge (`apply_monthly_food`) and the `food_daily_hunger` flag are gone.
+
+**Frontend:** Home app renders `state.flags["monthly_expenses"]` as an expense breakdown card. Budget modal tiles show daily cost + per-stat daily deltas.
 
 ### T3.10 — Fix payday amount in upcoming calendar display
 

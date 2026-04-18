@@ -34,11 +34,11 @@ const PRODUCT_LABELS = {
 };
 
 // Mirror of balance.FOOD_TIERS — keep in sync with src/game/balance.py.
-// `cost` is grosze per month; stat deltas apply at month rollover (clamped 0..100).
+// `cost` is grosze per DAY. Stat deltas apply every day tick (clamped 0..100).
 const FOOD_TIERS = {
-  cheap:   { cost: 30000,  daily_hunger: 3, health: -2, sanity: -1, energy:  0 },
-  normal:  { cost: 60000,  daily_hunger: 4, health:  0, sanity:  0, energy:  1 },
-  premium: { cost: 120000, daily_hunger: 5, health:  2, sanity:  2, energy:  2 },
+  cheap:   { cost: 1100, daily_hunger: 3, health: -1, sanity: -1, energy:  0 },
+  normal:  { cost: 2150, daily_hunger: 4, health:  0, sanity:  0, energy:  1 },
+  premium: { cost: 4300, daily_hunger: 5, health:  1, sanity:  1, energy:  1 },
 };
 const FOOD_TIER_ORDER = ["cheap", "normal", "premium"];
 const FOOD_DEFAULT_TIER = "normal";
@@ -274,6 +274,14 @@ function quid() {
         .filter((c) => c._sort >= 0)
         .sort((a, b) => a._sort - b._sort)
         .slice(0, 10);
+    },
+
+    get monthlyExpenses() {
+      return this.state?.flags?.monthly_expenses ?? [];
+    },
+
+    get monthlyExpensesTotal() {
+      return this.monthlyExpenses.reduce((s, e) => s + (e.amount || 0), 0);
     },
 
     get openEvent() {

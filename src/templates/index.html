@@ -97,6 +97,22 @@
                   </div>
                 </template>
               </div>
+
+              <div class="card col g-6">
+                <div class="row">
+                  <span class="sub-h">This month · expenses</span>
+                  <span class="text-xs dim" x-text="moneyBig(monthlyExpensesTotal)"></span>
+                </div>
+                <template x-if="monthlyExpenses.length === 0">
+                  <p class="dim text-sm">Nothing spent this month yet.</p>
+                </template>
+                <template x-for="(e, i) in monthlyExpenses" :key="i">
+                  <div class="row text-sm" style="padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                    <span x-text="e.label"></span>
+                    <span class="text-[color:var(--danger)]" x-text="'-' + moneyBig(e.amount)"></span>
+                  </div>
+                </template>
+              </div>
             </section>
 
             <!-- ---------- BANK ---------- -->
@@ -427,7 +443,7 @@
                                  :value="key" x-model="budgetDraft.food_tier" />
                           <span class="text-sm capitalize" x-text="key"></span>
                         </div>
-                        <span class="pill gold" x-text="moneyBig(foodTier(key).cost) + ' / mo'"></span>
+                        <span class="pill gold" x-text="moneyBig(foodTier(key).cost) + ' / day'"></span>
                       </div>
                       <div class="row text-xs dim mt-1" style="flex-wrap:wrap; gap:8px;">
                         <span style="display:inline-flex; align-items:center; gap:4px;" class="neon">
@@ -438,7 +454,7 @@
                           <span style="display:inline-flex; align-items:center; gap:4px;"
                                 :class="foodTier(key)[stat] > 0 ? 'neon' : (foodTier(key)[stat] < 0 ? 'text-[color:var(--danger)]' : 'dim')">
                             <img :src="statIcon(stat)" class="stat-icon" :alt="stat" />
-                            <span x-text="(foodTier(key)[stat] >= 0 ? '+' : '') + foodTier(key)[stat]"></span>
+                            <span x-text="(foodTier(key)[stat] >= 0 ? '+' : '') + foodTier(key)[stat] + '/day'"></span>
                           </span>
                         </template>
                       </div>

@@ -72,7 +72,7 @@ EFFECT_DELTA_BOUNDS = {
 
 # ---- Starting state (fresh grad) ------------------------------------------------
 
-STARTING_CHECKING = 120000        # 1200 PLN
+STARTING_CHECKING = 300000        # 1200 PLN
 STARTING_SAVINGS = 0
 STARTING_SALARY_GROSS = 450000    # 4500 PLN / month
 TAX_RATE = 0.22
@@ -82,13 +82,16 @@ STARTING_CREDIT_SCORE = 600
 
 # ---- Food -----------------------------------------------------------------------
 
-# Three tiers of food spend. `cost` is grosze per month.
+# Three tiers of food spend. `cost` is grosze per DAY.
 # `daily_hunger` = how much hunger is restored each day tick (offsets decay).
-# Stat deltas are applied once at month rollover (clamped to 0..100).
+# Stat deltas apply every day tick (clamped to 0..100). Budget can change
+# mid-month — the current tier is resolved on each day tick from
+# `flags.budget.food_tier`, falling back to the cheapest affordable tier if
+# checking can't cover today's cost.
 FOOD_TIERS = {
-    "cheap":   {"cost": 30000,  "daily_hunger": 3, "health": -2, "sanity": -1, "energy":  0},
-    "normal":  {"cost": 60000,  "daily_hunger": 4, "health":  0, "sanity":  0, "energy":  1},
-    "premium": {"cost": 120000, "daily_hunger": 5, "health":  2, "sanity":  2, "energy":  2},
+    "cheap":   {"cost": 1100, "daily_hunger": 3, "health": -1, "sanity": -1, "energy":  0},
+    "normal":  {"cost": 2150, "daily_hunger": 4, "health":  0, "sanity":  0, "energy":  1},
+    "premium": {"cost": 4300, "daily_hunger": 5, "health":  1, "sanity":  1, "energy":  1},
 }
 FOOD_TIER_ORDER = ("cheap", "normal", "premium")
 FOOD_DEFAULT_TIER = "normal"

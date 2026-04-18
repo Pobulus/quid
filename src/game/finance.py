@@ -13,6 +13,15 @@ def _clamp(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, v))
 
 
+def _record_expense(state: GameState, label: str, amount: int) -> None:
+    """Append a line to `state.flags['monthly_expenses']` so the UI can show
+    where this month's money went. Amount is positive grosze spent."""
+    if amount <= 0:
+        return
+    expenses = state.flags.setdefault("monthly_expenses", [])
+    expenses.append({"label": label, "amount": int(amount)})
+
+
 # ---- Income --------------------------------------------------------------------
 
 
@@ -33,12 +42,15 @@ def pay_salary(state: GameState) -> tuple[GameState, str]:
 def charge_rent(state: GameState) -> tuple[GameState, str]:
     rent = state.house.monthly_rent
     state.accounts.checking -= rent
+    _record_expense(state, "Rent", rent)
     return state, f"Rent: -{rent/100:.2f} PLN"
 
 
-def apply_monthly_food(state: GameState) -> tuple[GameState, list[str]]:
-    """Monthly food purchase + stat deltas. Sets the daily hunger drip for next month."""
-    logs: list[str] = []
+def apply_daily_food(state: GameState) -> tuple[GameState, str | None]:
+    """Daily food charge + stat deltas. Resolves current tier each day so
+    mid-month budget changes take effect immediately. Walks down tiers if
+    checking can't cover today's cost; if nothing is affordable, applies
+    cheap-tier stat penalties and skips the hunger restore (scraps day)."""
     chosen = state.flags.get("budget", {}).get("food_tier", B.FOOD_DEFAULT_TIER)
     if chosen not in B.FOOD_TIER_ORDER:
         chosen = B.FOOD_DEFAULT_TIER
@@ -46,7 +58,6 @@ def apply_monthly_food(state: GameState) -> tuple[GameState, list[str]]:
     shift = state.player.skills.get("cooking", 0) // B.COOKING_SHIFT_DIVISOR
     effective_idx = min(len(B.FOOD_TIER_ORDER) - 1, chosen_idx + shift)
 
-    # Walk down until affordable
     afforded_idx = None
     for idx in range(effective_idx, -1, -1):
         cost = B.FOOD_TIERS[B.FOOD_TIER_ORDER[idx]]["cost"]
@@ -54,34 +65,39 @@ def apply_monthly_food(state: GameState) -> tuple[GameState, list[str]]:
             afforded_idx = idx
             break
 
+    stats = state.player.stats
     if afforded_idx is None:
-        # Can't afford even cheap — apply cheap penalties, no drip
         cfg = B.FOOD_TIERS["cheap"]
-        state.flags["food_daily_hunger"] = 0
-        _apply_food_stat_deltas(state, cfg)
-        logs.append("Can't afford food this month — eating scraps")
-        return state, logs
+        for key in ("health", "sanity", "energy"):
+            stats[key] = _clamp(stats[key] + cfg[key], 0, B.STAT_MAX)
+        return state, "No food today — eating scraps"
 
     tier_name = B.FOOD_TIER_ORDER[afforded_idx]
     cfg = B.FOOD_TIERS[tier_name]
     state.accounts.checking -= cfg["cost"]
-    state.flags["food_daily_hunger"] = cfg["daily_hunger"]
-    _apply_food_stat_deltas(state, cfg)
-    suffix = f" (chosen {chosen}, cooking shift +{shift})" if afforded_idx != chosen_idx else ""
-    logs.append(f"Food ({tier_name}): -{cfg['cost']/100:.2f} PLN{suffix}")
-    return state, logs
-
-
-def _apply_food_stat_deltas(state: GameState, cfg: dict) -> None:
-    stats = state.player.stats
+    _bump_food_expense(state, tier_name, cfg["cost"])
+    stats["hunger"] = _clamp(stats["hunger"] + cfg["daily_hunger"], 0, B.STAT_MAX)
     for key in ("health", "sanity", "energy"):
-        stats[key] = _clamp(stats[key] + cfg[key], 0, 100)
+        stats[key] = _clamp(stats[key] + cfg[key], 0, B.STAT_MAX)
+    return state, None  # no per-day log spam; expense card shows the running total
+
+
+def _bump_food_expense(state: GameState, tier_name: str, amount: int) -> None:
+    """Aggregate today's food cost into a single per-tier line in monthly_expenses."""
+    label = f"Food ({tier_name})"
+    expenses = state.flags.setdefault("monthly_expenses", [])
+    for line in expenses:
+        if line.get("label") == label:
+            line["amount"] = int(line.get("amount", 0)) + int(amount)
+            return
+    expenses.append({"label": label, "amount": int(amount)})
 
 
 def charge_heating(state: GameState, month: int) -> tuple[GameState, str]:
     mult = B.HEATING_MONTH_MULTIPLIER.get(month, 1.0)
     amount = int(B.HEATING_BASE * mult)
     state.accounts.checking -= amount
+    _record_expense(state, "Heating", amount)
     return state, f"Heating: -{amount/100:.2f} PLN"
 
 
@@ -134,6 +150,7 @@ def charge_credit_card_bill(state: GameState) -> tuple[GameState, str]:
         cc.balance -= min_payment
         state.flags.setdefault("cc_payments_made", 0)
         state.flags["cc_payments_made"] += 1
+        _record_expense(state, "CC min payment", min_payment)
         return state, f"CC min payment: -{min_payment/100:.2f} PLN"
     state.flags.setdefault("cc_payments_missed", 0)
     state.flags["cc_payments_missed"] += 1
@@ -151,6 +168,7 @@ def make_loan_payment(state: GameState, loan_index: int) -> tuple[GameState, str
         state.accounts.checking -= pay
         loan.remaining -= pay
         loan.payments_made += 1
+        _record_expense(state, f"Loan payment ({loan.kind})", pay)
         return state, f"Loan payment ({loan.kind}): -{pay/100:.2f} PLN"
     loan.payments_missed += 1
     return state, f"Loan payment ({loan.kind}) MISSED"
