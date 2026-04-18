@@ -307,8 +307,27 @@ function quid() {
 
     async advanceDay()        { await this.postAction("/api/advance-day"); },
     async advanceUntilEvent() {
-      const data = await this.postAction("/api/advance-until-event");
-      if (data && data.event) this.showToast("A new event arrived.");
+      // Track A's /api/advance-until-event isn't wired yet; while it's missing,
+      // call the SAGE mock directly so the event loop is testable end-to-end.
+      // Once Track A lands, that endpoint will internally call SAGE and this
+      // shortcut can go away.
+      const data = await this.postAction("/api/sage/event", { force: true });
+      if (data && data.event) {
+        this.activeApp = "email";
+        this.openEventId = data.event.event_id;
+        this.lastResolution = null;
+        this.showToast("A new event arrived.");
+      } else if (data) {
+        this.showToast("Quiet day — no event.");
+      }
+    },
+    async summonEvent() {
+      // Explicit "spawn an event now" — bound to the Email empty-state CTA.
+      const data = await this.postAction("/api/sage/event", { force: true });
+      if (data && data.event) {
+        this.openEventId = data.event.event_id;
+        this.lastResolution = null;
+      }
     },
     async rest()              { await this.postAction("/api/rest"); },
     async practiceSkill(skill){ await this.postAction("/api/practice-skill", { skill }); },
@@ -328,19 +347,28 @@ function quid() {
 
       // Fallback local resolution so the UI stays useful before Track B is wired.
       if (!data) {
-        const dc = option.skill_check?.difficulty_class ?? 0;
-        const passed = option.skill_check
-          ? rolled + this.skillValue(option.skill_check.skill) >= dc
-          : true;
+        const sc = option.skill_check;
+        const dc = sc?.difficulty_class ?? 0;
+        const skillName = sc?.skill ?? null;
+        const skillValue = sc ? this.skillValue(sc.skill) : 0;
+        const total = rolled + skillValue;
+        const passed = sc ? total >= dc : true;
         const effects = passed ? option.effects_on_success : option.effects_on_failure;
-        this.lastResolution = { option_id: option.id, rolled, dc, passed, effects, local: true };
+        this.lastResolution = {
+          option_id: option.id, rolled, dc, skill: skillName, skillValue, total,
+          passed, effects, local: true,
+        };
       } else {
+        const r = data.resolution ?? {};
         this.lastResolution = {
           option_id: option.id,
           rolled,
-          dc: option.skill_check?.difficulty_class ?? 0,
-          passed: data.resolution?.passed ?? true,
-          effects: data.resolution?.effects_applied ?? {},
+          dc: r.dc ?? option.skill_check?.difficulty_class ?? 0,
+          skill: r.skill ?? option.skill_check?.skill ?? null,
+          skillValue: r.skill_value ?? 0,
+          total: r.total ?? rolled,
+          passed: r.passed ?? false,
+          effects: r.effects_applied ?? {},
           local: false,
         };
       }

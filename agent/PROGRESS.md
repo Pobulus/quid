@@ -13,3 +13,4 @@ One line per completed task from `TASKS.md`. Append at the bottom. Optional `[re
 - 2026-04-18 · C6 Game-over modal: overlay shows when `state.game_over != null`, cause + flavor + new-game button wiping localStorage.
 - 2026-04-18 · Fake-state fixture `src/static/fake_state.json` (CC + bnpl loan + calendar + boiler-emergency event); dev bar exposes "load fake" / "new game" / "export"; fixture round-trips cleanly through `/api/echo`.
 - 2026-04-18 · B4+B5+B6 SAGE mock: 4 hand-written events in `events_fallback.py`, `sage.py` random picker (no Ollama), `/api/sage/event` and `/api/event/resolve` wired with d20 + clamped effects + recent_events update.
+- 2026-04-18 · Frontend wired to SAGE mock: Home "Advance until event" calls `/api/sage/event` directly (Track A passthrough TBD), auto-jumps to Email + opens new event; Email empty-state has "Summon event now" CTA.

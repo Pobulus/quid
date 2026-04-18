@@ -34,7 +34,7 @@ def sage_event(request, payload: dict = Body(...)):
     state = GameState.from_dict(payload["state"])
     force = bool(payload.get("force", True))
 
-    rng = random.Random(state.seed + state.day + state.month * 31)
+    rng = random.Random()
     prob = sage.event_probability(state)
 
     if not force and rng.random() > prob:
