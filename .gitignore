@@ -8,7 +8,7 @@ __pycache__/
 .eggs/
 build/
 dist/
-
+res/
 # Virtual environments
 .venv/
 venv/
@@ -31,4 +31,3 @@ db.sqlite3-journal
 .DS_Store
 *.swp
 *.swo
-

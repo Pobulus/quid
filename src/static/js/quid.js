@@ -102,6 +102,20 @@ function tinyMarkdown(src) {
     .join("");
 }
 
+const STAT_ICONS = {
+  health:  "/static/img/stat_health.png",
+  hunger:  "/static/img/stat_hunger.png",
+  sanity:  "/static/img/stat_sanity.png",
+  energy:  "/static/img/stat_energy.png",
+};
+
+const SKILL_ICONS = {
+  cooking:   "/static/img/skill_cook.png",
+  handiwork: "/static/img/skill_hadniwork.png",   // filename typo in the source asset
+  charisma:  "/static/img/skill_charisma.png",
+  physique:  "/static/img/skill_physique.png",
+};
+
 function quid() {
   return {
     state: null,
@@ -111,6 +125,9 @@ function quid() {
     openEventId: null,
     lastResolution: null,     // { option_id, rolled, dc, passed, effects }
     rollingEventId: null,     // while animating
+
+    statList: ["health","hunger","sanity","energy"].map(k => ({ key: k, icon: STAT_ICONS[k] })),
+    skillList: ["cooking","handiwork","charisma","physique"].map(k => ({ key: k, icon: SKILL_ICONS[k] })),
 
     // ---- lifecycle ----
 
