@@ -4,18 +4,27 @@ A deliberately unforgiving financial-literacy RPG. Browser game; Django serves t
 
 See `docs/Hackathon_project.md` for the design spec and `agent/TASKS.md` for the build plan.
 
-## Setup
+## Setup (first time)
 
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install 'django>=5.1,<6' django-ninja python-dotenv 'pydantic>=2' httpx
-cp .env.example .env  # then edit OLLAMA_HOST / OLLAMA_MODEL
+cp .env.example .env        # edit OLLAMA_HOST / OLLAMA_MODEL
 cd src
 ../.venv/bin/python manage.py migrate
+```
+
+## Run
+
+```sh
+cd src
 ../.venv/bin/python manage.py runserver
 ```
 
 Open <http://localhost:8000/>.
+
+The page boots from `localStorage` or calls `/api/new-game` on first visit.
+Use the **"load fake"** button (bottom-left of the screen) to populate all four apps with rich demo data without needing Track A/B endpoints.
 
 ## Environment
 
