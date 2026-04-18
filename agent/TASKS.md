@@ -355,7 +355,7 @@ Click "advance until event" → server loops day ticks → probability check →
 
 ### T2.4 — Unlock tiers gate the UI
 
-Bank app reads `available_products(state)` and renders each product as active, lockable (not yet met), or locked-visible (shown as preview with requirement). Both credit score and net worth factor in. Investment tab shows “unlocks at credit score 750 + 20,000 PLN net worth”.
+**Owner:** Track C. Bank app reads `available_products(state)` and renders each product as active, lockable (not yet met), or locked-visible (shown as preview with requirement). Both credit score and net worth factor in. Investment tab shows “unlocks at credit score 750 + 20,000 PLN net worth”.
 
 ### T2.5 — Practice skill rate progression
 
@@ -373,7 +373,7 @@ If Ollama is unreachable, log warning, set a flag, and force fallback templates 
 
 ### T3.2 — Save/export/import
 
-Buttons: “New game” (confirm), “Export save” (download JSON), “Import save” (file picker + schema check).
+**Owner:** Track C. Buttons: “New game” (confirm), “Export save” (download JSON), “Import save” (file picker + schema check).
 
 ### T3.3 — Demo script
 
@@ -381,7 +381,7 @@ Buttons: “New game” (confirm), “Export save” (download JSON), “Import 
 
 ### T3.4 — Cyberpunk theme pass
 
-DaisyUI custom theme: base `#0a0a14`, primary `#00ffc3`, secondary `#ff0080`, accent `#ffcc00`. Scanline overlay (CSS only). Subtle CRT flicker on the phone frame. Don’t spend more than an hour here.
+**Owner:** Track C. DaisyUI custom theme: base `#0a0a14`, primary `#00ffc3`, secondary `#ff0080`, accent `#ffcc00`. Scanline overlay (CSS only). Subtle CRT flicker on the phone frame. Don’t spend more than an hour here.
 
 ### T3.5 — Bug bash
 
@@ -450,6 +450,39 @@ Current test suite (`game/tests.py`) covers practice-skill math (3 tests) and in
 
 Add one test class per module (`FinanceTest`, `EventsTest`, `SageTest`). Each test method covers one named behaviour. Aim: every public function in `finance.py` and `sage.py` has at least one passing + one failure-path test. `manage.py test game.tests` must stay green.
 
+### T3.12 — Apply for credit card
+
+**Owner:** Track A (endpoint + finance) + Track C (UI button).
+
+Bank app's products panel currently shows `cc_starter` / `cc_better` as "locked_visible" or "active" but clicking does nothing. Finance engine already has `available_products(state)` and a `CreditCard` dataclass; what's missing is the acquisition path.
+
+- **Backend:** new `finance.apply_for_credit_card(state, tier)` (tier = `"starter" | "better"`) — validates unlock via `available_products`, reads limit/APR from `balance.CC_STARTER_*` / `CC_BETTER_*`, assigns `due_day = CC_DUE_DAY`, `min_payment_pct = CC_MIN_PAYMENT_PCT`, and seeds the `cc_due` calendar event for the current month (T2.2 already seeds it on new-game *if* `has_cc` — reuse `seed_month_calendar`'s branch or append one directly). Raise `ValueError` if the player already has a CC.
+- **Endpoint:** `POST /api/apply-cc` with `{state, tier}` → returns `{state, message}`.
+- **UI:** in `quid.js`, `applyForCreditCard(tier)` calls the endpoint, surfaces `message` as a toast. In `index.html` the products-panel tiles for `cc_starter` / `cc_better` become clickable when `productStatus(key) === 'active'`.
+
+### T3.13 — Transfer between checking and savings
+
+**Owner:** Track A (endpoint) + Track C (UI modal).
+
+The Bank app's "Transfer" button is a stub toast. Implement a simple bidirectional transfer.
+
+- **Backend:** new `finance.transfer(state, direction, amount)` where `direction = "to_savings" | "to_checking"`. Validates amount > 0 and source has the funds (else `ValueError`). Moves integer grosze between `state.accounts.checking` and `state.accounts.savings`.
+- **Endpoint:** `POST /api/transfer` with `{state, direction, amount}` → `{state, message}`.
+- **UI:** replace the stub `@click="showToast('Transfer UI — Phase 2.')"` with a modal mirroring the budget-modal pattern: direction radio + PLN amount input (converted to grosze). Submit posts + replaces state.
+
+### T3.14 — Take personal loan
+
+**Owner:** Track A (endpoint) + Track C (UI).
+
+`finance.take_loan("personal", amount)` already works — it seeds the `loan_due` calendar entry and credits checking. What's missing is the player-initiated endpoint.
+
+- **Endpoint:** `POST /api/take-loan` with `{state, kind, amount}` where `kind ∈ {"personal", "bnpl"}`. For MVP: validate against `available_products` (personal loan requires credit score 650; bnpl always available), cap `amount` at a sane per-loan ceiling (add `MAX_PERSONAL_LOAN` / `MAX_BNPL` to `balance.py`), return `{state, message}`.
+- **UI:** products panel `personal_loan` tile opens an amount modal when active; `bnpl` tile is always live. Keep it terse — one modal reused via a `loanKind` slot on the Alpine component.
+
+### T3.15 — Ollama HTTP client (B2)
+
+**Owner:** Track B. `generate_event_via_llm(state, call_fn)` is fully wired in `sage.py` but `call_fn` has never been implemented — today the endpoint still uses the deterministic `generate_event` mock. Add a real `call_fn` that POSTs to `{OLLAMA_HOST}/api/chat` with `format: "json"`, the built system/user prompts, and the model from `OLLAMA_MODEL`. Respect `OLLAMA_AVAILABLE` (T3.1). Flip `/api/sage/event` and `advance-until-event` to use the LLM path when available, fall back to `generate_event` otherwise. Keep a 10s timeout; any transport error short-circuits to fallback (the existing pipeline already handles this if the exception leaks).
+
 -----
 
 ## Cut list (don’t build these)
@@ -472,9 +505,9 @@ Add one test class per module (`FinanceTest`, `EventsTest`, `SageTest`). Each te
 - **Dev C** — Track C (UI). Starts with fake state, most visual progress early, best candidate to demo.
 
 During integration everyone works together. Phase 3 split (no shared tasks):
-- **Track A:** T3.3 Demo script, T3.5 Bug bash.
-- **Track B:** T3.1 Ollama boot check, T3.6 Drop slug / server-side event_id.
-- **Track C:** T2.1 Set Budget modal, T3.2 Save/export/import, T3.4 Cyberpunk theme, T3.7 **[URGENT]** Lock resolved events.
+- **Track A:** T3.3 Demo script, T3.5 Bug bash, T3.8 Force budget (backend gate), T3.9 Budget deducts money, T3.11 Test coverage, T3.12 Apply for CC (backend), T3.13 Transfer (backend), T3.14 Take personal loan (backend).
+- **Track B:** T3.1 Ollama boot check, T3.6 Drop slug / server-side event_id, T3.11 Test coverage (sage.py portion), T3.15 Ollama HTTP client (B2).
+- **Track C:** T2.1 Set Budget modal, T2.4 Unlock-tier UI gating, T3.2 Save/export/import, T3.4 Cyberpunk theme, T3.7 **[URGENT]** Lock resolved events, T3.8 Force budget (modal wire), T3.10 Payday amount display, T3.12/T3.13/T3.14 Bank UI buttons + modals.
 
 -----
 
