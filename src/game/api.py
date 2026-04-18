@@ -1,6 +1,7 @@
 import random
 
 from ninja import Body, NinjaAPI
+from ninja.errors import HttpError
 
 from game import sage,events
 from game.state import GameState, new_game
@@ -9,7 +10,10 @@ api = NinjaAPI(title="QUID API")
 
 
 def _load(payload: dict) -> GameState:
-    return GameState.from_dict(payload["state"])
+    try:
+        return GameState.from_dict(payload["state"])
+    except (KeyError, ValueError) as e:
+        raise HttpError(400, f"invalid state: {e}")
 
 
 def _out(state: GameState, **extra) -> dict:
@@ -75,7 +79,7 @@ def sage_event(request, payload: dict = Body(...)):
     instruction ("served immediately at random"). Real LLM-backed version will
     flip `force=False` and respect the gate.
     """
-    state = GameState.from_dict(payload["state"])
+    state = _load(payload)
     force = bool(payload.get("force", True))
 
     rng = random.Random()
@@ -91,9 +95,11 @@ def sage_event(request, payload: dict = Body(...)):
 
 @api.post("/event/resolve")
 def event_resolve(request, payload: dict = Body(...)):
-    state = GameState.from_dict(payload["state"])
-    event_id = payload["event_id"]
-    option_id = payload["option_id"]
+    state = _load(payload)
+    event_id = payload.get("event_id")
+    option_id = payload.get("option_id")
+    if not event_id or not option_id:
+        raise HttpError(400, "event_id and option_id are required")
     try:
         if event_id.startswith("cal_"):
             resolution = events.resolve_calendar_event(state, event_id, option_id)
@@ -102,8 +108,8 @@ def event_resolve(request, payload: dict = Body(...)):
                 state,
                 event_id=event_id,
                 option_id=option_id,
-                roll_d20=int(payload["roll_d20"]),
+                roll_d20=int(payload.get("roll_d20", 0)),
             )
-    except ValueError as e:
-        return {"error": str(e)}, 400
+    except (ValueError, KeyError) as e:
+        raise HttpError(400, str(e))
     return {"state": state.to_dict(), "resolution": resolution}
