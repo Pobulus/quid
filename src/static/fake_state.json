@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "seed": 1234567,
+  "day": 12,
+  "month": 2,
+  "day_of_week": 1,
+  "actions_today": 1,
+  "player": {
+    "stats": { "health": 72, "hunger": 55, "sanity": 40, "energy": 65 },
+    "skills": { "cooking": 3, "handiwork": 1, "charisma": 2, "physique": 1 },
+    "skill_practice_counts": { "cooking": 1, "handiwork": 0, "charisma": 2, "physique": 0 },
+    "salary_gross_monthly": 450000,
+    "tax_rate": 0.22,
+    "workdays_this_month": 8
+  },
+  "accounts": {
+    "checking": 180000,
+    "savings": 45000,
+    "savings_goal": { "name": "Emergency fund", "target": 300000 }
+  },
+  "credit_card": {
+    "limit": 100000,
+    "balance": 42000,
+    "apr": 0.34,
+    "due_day": 25,
+    "min_payment_pct": 0.05
+  },
+  "loans": [
+    {
+      "kind": "bnpl",
+      "principal": 30000,
+      "remaining": 30000,
+      "apr": 0.0,
+      "monthly_payment": 10000,
+      "due_day": 15,
+      "payments_made": 0,
+      "payments_missed": 0
+    }
+  ],
+  "credit_score": 640,
+  "house": {
+    "tier": "shoddy_rental",
+    "shoddiness": 6,
+    "durability": 4,
+    "distance_to_work_km": 12,
+    "monthly_rent": 180000
+  },
+  "calendar": [
+    { "day": 15, "month": 2, "kind": "loan_due",     "amount": 10000,  "auto_resolve": false },
+    { "day": 10, "month": 2, "kind": "heating_bill", "amount": 50000,  "auto_resolve": true  },
+    { "day": 25, "month": 2, "kind": "cc_due",       "amount": 2100,   "auto_resolve": true  },
+    { "day": 1,  "month": 3, "kind": "payday",       "amount": 351000, "auto_resolve": true  },
+    { "day": 5,  "month": 3, "kind": "rent_due",     "amount": 180000, "auto_resolve": true  },
+    { "day": 10, "month": 3, "kind": "heating_bill", "amount": 25000,  "auto_resolve": true  }
+  ],
+  "inbox": [
+    {
+      "event_id": "evt_boiler_001",
+      "received_day": 12,
+      "received_month": 2,
+      "status": "unread",
+      "event": {
+        "slug": "boiler_emergency",
+        "sender": "Landlord",
+        "title": "Boiler decided to quit",
+        "body": "Your ancient boiler is making a noise somewhere between *dying whale* and *industrial blender*. Ice-cold showers at 6 AM. The landlord says they'll send someone — eventually. A neighbor mentions a handyman who does cash jobs for 150 PLN.\n\nWhat do you do?",
+        "options": [
+          {
+            "id": "opt_diy",
+            "label": "Fix it yourself with a YouTube tutorial",
+            "hint": "Risky. If it works: pride + skill. If not: worse boiler.",
+            "skill_check": { "skill": "handiwork", "difficulty_class": 14 },
+            "effects_on_success": { "sanity": 5, "handiwork": 1, "energy": -5 },
+            "effects_on_failure": { "sanity": -8, "money": -12000, "energy": -10 }
+          },
+          {
+            "id": "opt_cash_guy",
+            "label": "Call the cash handyman (150 PLN)",
+            "hint": "Fast, cheap, definitely-not-insured.",
+            "skill_check": null,
+            "effects_on_success": { "money": -15000, "sanity": 3 },
+            "effects_on_failure": { "money": -15000, "sanity": 3 }
+          },
+          {
+            "id": "opt_wait",
+            "label": "Wait for the landlord, take cold showers",
+            "hint": "Free. Miserable.",
+            "skill_check": null,
+            "effects_on_success": { "sanity": -12, "health": -6, "physique": 1 },
+            "effects_on_failure": { "sanity": -12, "health": -6, "physique": 1 }
+          }
+        ]
+      }
+    },
+    {
+      "event_id": "evt_bnpl_ad_001",
+      "received_day": 9,
+      "received_month": 2,
+      "status": "resolved",
+      "event": {
+        "slug": "bnpl_pitch",
+        "sender": "KlarnaPay",
+        "title": "Pre-approved: split any purchase in 4!",
+        "body": "We noticed you could use some *breathing room*. Split any purchase up to 500 PLN into 4 easy payments. 0% for 30 days.",
+        "options": [
+          { "id": "opt_accept", "label": "Accept offer", "hint": "Shiny. Dangerous.", "skill_check": null, "effects_on_success": {}, "effects_on_failure": {} },
+          { "id": "opt_ignore", "label": "Ignore", "hint": "Healthy.", "skill_check": null, "effects_on_success": { "sanity": 2 }, "effects_on_failure": { "sanity": 2 } }
+        ]
+      }
+    }
+  ],
+  "recent_events": [
+    { "slug": "bnpl_pitch", "days_ago": 3 },
+    { "slug": "grocery_sale", "days_ago": 6 }
+  ],
+  "flags": { "tutorial_seen": true, "took_bnpl_this_month": true },
+  "game_over": null
+}
