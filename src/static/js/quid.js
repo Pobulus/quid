@@ -32,6 +32,16 @@ const PRODUCT_LABELS = {
   move_nice_rental:   { name: "Move to a nice rental",     blurb: "Top tier in Home app." },
 };
 
+// Mirror of balance.FOOD_TIERS — keep in sync with src/game/balance.py.
+// `cost` is grosze per month; stat deltas apply at month rollover (clamped 0..100).
+const FOOD_TIERS = {
+  cheap:   { cost: 30000,  daily_hunger: 3, health: -2, sanity: -1, energy:  0 },
+  normal:  { cost: 60000,  daily_hunger: 4, health:  0, sanity:  0, energy:  1 },
+  premium: { cost: 120000, daily_hunger: 5, health:  2, sanity:  2, energy:  2 },
+};
+const FOOD_TIER_ORDER = ["cheap", "normal", "premium"];
+const FOOD_DEFAULT_TIER = "normal";
+
 const HOUSE_LABELS = {
   shoddy_rental:  "Shoddy rental",
   decent_rental:  "Decent rental",
@@ -125,6 +135,9 @@ function quid() {
     openEventId: null,
     lastResolution: null,     // { option_id, rolled, dc, passed, effects }
     rollingEventId: null,     // while animating
+    budgetModalOpen: false,
+    budgetDraft: { food_tier: FOOD_DEFAULT_TIER, leisure: 0, bills_buffer: 0 },
+    budgetSaving: false,
 
     statList: ["health","hunger","sanity","energy"].map(k => ({ key: k, icon: STAT_ICONS[k] })),
     skillList: ["cooking","handiwork","charisma","physique"].map(k => ({ key: k, icon: SKILL_ICONS[k] })),
@@ -395,6 +408,49 @@ function quid() {
         };
       }
       this.rollingEventId = null;
+    },
+
+    // ---- budget modal ----
+
+    foodTierOrder() { return FOOD_TIER_ORDER; },
+    foodTier(key)   { return FOOD_TIERS[key]; },
+    statIcon(key)   { return STAT_ICONS[key]; },
+    skillIcon(key)  { return SKILL_ICONS[key]; },
+
+    currentBudget() {
+      return this.state?.flags?.budget ?? {};
+    },
+
+    openBudgetModal() {
+      const cur = this.currentBudget();
+      this.budgetDraft = {
+        food_tier: cur.food_tier ?? FOOD_DEFAULT_TIER,
+        leisure: cur.leisure ?? 0,
+        bills_buffer: cur.bills_buffer ?? 0,
+      };
+      this.budgetModalOpen = true;
+    },
+
+    closeBudgetModal() {
+      if (this.budgetSaving) return;
+      this.budgetModalOpen = false;
+    },
+
+    async saveBudget() {
+      if (this.budgetSaving) return;
+      this.budgetSaving = true;
+      const d = this.budgetDraft;
+      const budget = {
+        food_tier: d.food_tier,
+        leisure: Math.max(0, parseInt(d.leisure, 10) || 0),
+        bills_buffer: Math.max(0, parseInt(d.bills_buffer, 10) || 0),
+      };
+      const data = await this.postAction("/api/set-budget", { budget });
+      this.budgetSaving = false;
+      if (data) {
+        this.budgetModalOpen = false;
+        this.showToast(data.message || "Budget saved.");
+      }
     },
 
     // ---- save/export ----
