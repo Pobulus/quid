@@ -35,6 +35,8 @@ def echo(request, payload: dict = Body(...)):
 @api.post("/advance-day")
 def advance_day(request, payload: dict = Body(...)):
     state = _load(payload)
+    if events.budget_required(state):
+        return _out(state, logs=[], reason="budget_required")
     state, logs = events.advance_day(state)
     return _out(state, logs=logs)
 
