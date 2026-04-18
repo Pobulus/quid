@@ -300,7 +300,7 @@
 
                   <template x-for="ref in inboxSorted" :key="ref.event_id">
                     <div class="inbox-row" :class="ref.status === 'unread' ? 'unread' : ''"
-                         @click="openEventId = ref.event_id; lastResolution = null">
+                         @click="openEventRef(ref)">
                       <div class="unread-dot" x-show="ref.status === 'unread'"></div>
                       <div class="col g-4" style="flex:1; min-width:0;">
                         <div class="row text-xs dim">
