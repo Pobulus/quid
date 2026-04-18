@@ -214,7 +214,7 @@
               <!-- Products / unlocks -->
               <div class="card col g-6">
                 <span class="sub-h">Products</span>
-                <template x-for="key in ['cc_starter','personal_loan','savings_premium','cc_better','deposit','investments','mortgage']" :key="key">
+                <template x-for="key in ['cc_starter','personal_loan','bnpl','savings_premium','cc_better','deposit','investments','mortgage']" :key="key">
                   <div class="card-tight"
                        style="background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;"
                        :class="[productStatus(key) === 'locked_visible' ? 'locked' : '', productClickable(key) ? 'clickable' : '']"
@@ -481,6 +481,34 @@
 
                 <button class="btn-q mag" :disabled="budgetSaving" @click="saveBudget()">
                   <span x-text="budgetSaving ? 'Saving…' : 'Save budget'"></span>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- ===== loan modal ===== -->
+          <template x-if="loanModalOpen">
+            <div class="modal-overlay" @click.self="closeLoanModal()">
+              <div class="modal-panel col g-8">
+                <div class="row">
+                  <span class="sub-h" x-text="'Take ' + loanLabel(loanDraft.kind).toLowerCase()"></span>
+                  <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          @click="closeLoanModal()">Close</button>
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim"
+                        x-text="'APR ' + Math.round(loanApr(loanDraft.kind) * 100) + '% · max ' + (loanCap(loanDraft.kind)/100) + ' PLN'"></span>
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim">Amount (PLN)</span>
+                  <input type="number" min="0" step="0.01" class="budget-input"
+                         x-model.number="loanDraft.amount_pln" />
+                </div>
+
+                <button class="btn-q mag" :disabled="loanSaving" @click="saveLoan()">
+                  <span x-text="loanSaving ? 'Submitting…' : 'Confirm'"></span>
                 </button>
               </div>
             </div>

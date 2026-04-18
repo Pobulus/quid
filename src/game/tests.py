@@ -477,6 +477,24 @@ class FinanceTest(TestCase):
         self.assertGreater(s.accounts.savings, 100000)
         self.assertGreater(s.credit_card.balance, 50000)
 
+    def test_take_personal_loan_requires_score_and_caps_amount(self):
+        # Endpoint-level gating isn't exercised here (HttpError path); we
+        # check finance.take_loan directly handles the score gate, and
+        # balance.MAX_PERSONAL_LOAN has a sane value.
+        self.assertGreaterEqual(B.MAX_PERSONAL_LOAN, 100000)
+        self.assertGreaterEqual(B.MAX_BNPL, 10000)
+        s = new_game(seed=1)
+        s.credit_score = 500  # below 650 unlock
+        s, msg = finance.take_loan(s, "personal", 100000)
+        self.assertIn("unavailable", msg)
+        self.assertEqual(s.loans, [])
+
+        s.credit_score = 700
+        before = s.accounts.checking
+        s, msg = finance.take_loan(s, "personal", 100000)
+        self.assertEqual(s.accounts.checking, before + 100000)
+        self.assertEqual(s.loans[0].kind, "personal")
+
     def test_transfer_to_savings_moves_money(self):
         s = new_game(seed=1)
         s.accounts.checking = 100000

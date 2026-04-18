@@ -22,6 +22,7 @@ const UNLOCK_TIERS = {
 };
 
 const PRODUCT_LABELS = {
+  bnpl:               { name: "Buy now, pay later",        blurb: "0% for 30 days, then 40% APR." },
   cc_starter:         { name: "Starter credit card",       blurb: "Low limit, high APR." },
   cc_better:          { name: "Premium credit card",       blurb: "Higher limit, lower APR." },
   personal_loan:      { name: "Personal loan",             blurb: "Standard APR, fixed term." },
@@ -139,6 +140,9 @@ function quid() {
     transferModalOpen: false,
     transferDraft: { direction: "to_savings", amount_pln: 0 },
     transferSaving: false,
+    loanModalOpen: false,
+    loanDraft: { kind: "personal", amount_pln: 0 },
+    loanSaving: false,
     budgetModalOpen: false,
     budgetModalRequired: false,   // true when server gated on budget_required — modal can't be dismissed
     budgetDraft: { food_tier: FOOD_DEFAULT_TIER, leisure: 0, bills_buffer: 0 },
@@ -325,15 +329,6 @@ function quid() {
 
     // ---- products / unlocks ----
 
-    productStatus(key) {
-      const tiers = UNLOCK_TIERS[key];
-      if (!tiers) return "active";
-      const [csReq, nwReq] = tiers;
-      const csOk = csReq == null || this.state.credit_score >= csReq;
-      const nwOk = nwReq == null || this.netWorth >= nwReq;
-      return csOk && nwOk ? "active" : "locked_visible";
-    },
-
     productRequirement(key) {
       const tiers = UNLOCK_TIERS[key];
       if (!tiers) return "";
@@ -354,15 +349,29 @@ function quid() {
       return false;
     },
 
+    productStatus(key) {
+      // bnpl has no unlock row — always active.
+      if (key === "bnpl") return "active";
+      const tiers = UNLOCK_TIERS[key];
+      if (!tiers) return "active";
+      const [csReq, nwReq] = tiers;
+      const csOk = csReq == null || this.state.credit_score >= csReq;
+      const nwOk = nwReq == null || this.netWorth >= nwReq;
+      return csOk && nwOk ? "active" : "locked_visible";
+    },
+
     productClickable(key) {
-      if (key !== "cc_starter" && key !== "cc_better") return false;
+      const actionable = ["cc_starter", "cc_better", "personal_loan", "bnpl"];
+      if (!actionable.includes(key)) return false;
       if (this.productStatus(key) !== "active") return false;
       return !this.productOwned(key);
     },
 
     onProductClick(key) {
-      if (key === "cc_starter") return this.applyForCreditCard("starter");
-      if (key === "cc_better")  return this.applyForCreditCard("better");
+      if (key === "cc_starter")    return this.applyForCreditCard("starter");
+      if (key === "cc_better")     return this.applyForCreditCard("better");
+      if (key === "personal_loan") return this.openLoanModal("personal");
+      if (key === "bnpl")          return this.openLoanModal("bnpl");
     },
 
     async applyForCreditCard(tier) {
@@ -633,6 +642,61 @@ function quid() {
         this.budgetModalOpen = false;
         this.budgetModalRequired = false;
         this.showToast(data.message || "Budget saved.");
+      }
+    },
+
+    // ---- loan modal ----
+
+    loanCap(kind) {
+      // Mirrors balance.MAX_PERSONAL_LOAN / MAX_BNPL. Keep in sync.
+      return kind === "personal" ? 2000000 : 300000;
+    },
+    loanApr(kind) { return kind === "personal" ? 0.14 : 0.40; },
+    loanLabel(kind) { return kind === "personal" ? "Personal loan" : "Buy now, pay later"; },
+
+    openLoanModal(kind) {
+      this.loanDraft = { kind, amount_pln: 0 };
+      this.loanModalOpen = true;
+    },
+
+    closeLoanModal() {
+      if (this.loanSaving) return;
+      this.loanModalOpen = false;
+    },
+
+    async saveLoan() {
+      if (this.loanSaving) return;
+      const pln = Number(this.loanDraft.amount_pln) || 0;
+      const amount = Math.round(pln * 100);
+      if (amount <= 0) { this.showToast("Enter a positive amount."); return; }
+      if (amount > this.loanCap(this.loanDraft.kind)) {
+        this.showToast(`Max ${this.loanCap(this.loanDraft.kind) / 100} PLN.`);
+        return;
+      }
+      if (!confirm(`Take a ${this.loanLabel(this.loanDraft.kind)} for ${pln.toFixed(2)} PLN?`)) return;
+      this.loanSaving = true;
+      try {
+        const r = await fetch("/api/take-loan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            state: this.state,
+            kind: this.loanDraft.kind,
+            amount,
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.showToast(data.detail || `Error ${r.status} from /api/take-loan.`);
+          return;
+        }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.loanModalOpen = false;
+        this.showToast(data.message || "Loan taken.");
+      } catch (_) {
+        this.showToast("Network error.");
+      } finally {
+        this.loanSaving = false;
       }
     },
 
