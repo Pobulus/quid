@@ -271,6 +271,11 @@ function quid() {
       return this.state.inbox.find((e) => e.event_id === this.openEventId) ?? null;
     },
 
+    openEventRef(ref) {
+      this.openEventId = ref.event_id;
+      this.lastResolution = ref.resolution ?? null;
+    },
+
     // ---- credit score gauge ----
 
     scorePct(score) {
@@ -385,6 +390,7 @@ function quid() {
     async resolveOption(option) {
       const ev = this.openEvent;
       if (!ev || this.rollingEventId) return;
+      if (ev.status === "resolved" || ev.resolution) return;
       this.rollingEventId = ev.event_id;
       const rolled = rollD20FromState(this.state);
       this.save();
@@ -422,6 +428,9 @@ function quid() {
           local: false,
         };
       }
+      ev.status = "resolved";
+      ev.resolution = this.lastResolution;
+      this.save();
       this.rollingEventId = null;
     },
 
