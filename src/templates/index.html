@@ -510,6 +510,8 @@
     <button @click="newDemoGame()">demo</button>
     <button @click="loadFakeState()">load fake</button>
     <button @click="exportSave()" x-show="state">export</button>
+    <button @click="triggerImport()">import</button>
+    <input type="file" x-ref="importFile" @change="importSave($event)" accept="application/json,.json" style="display:none" />
   </div>
 
 </body>
