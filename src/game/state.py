@@ -206,7 +206,6 @@ def new_game(seed: Optional[int] = None, demo: bool = False) -> GameState:
 
     house_cfg = B.HOUSE_TIERS["shoddy_rental"]
     rent = house_cfg["rent"]
-    starter_drip = B.FOOD_TIERS[B.FOOD_DEFAULT_TIER]["daily_hunger"]
     state = GameState(
         schema_version=B.SCHEMA_VERSION,
         seed=seed,
@@ -237,7 +236,6 @@ def new_game(seed: Optional[int] = None, demo: bool = False) -> GameState:
         calendar=seed_month_calendar(1, rent, has_cc=False),
         flags={
             "budget": {"food_tier": B.FOOD_DEFAULT_TIER},
-            "food_daily_hunger": starter_drip,
         },
     )
 

@@ -27,10 +27,6 @@ def _apply_stat_decay(state: GameState) -> None:
         state.player.stats[key] = max(0, state.player.stats[key] - amt)
 
 
-def _apply_food_drip(state: GameState) -> None:
-    drip = state.flags.get("food_daily_hunger", 0)
-    if drip:
-        state.player.stats["hunger"] = min(B.STAT_MAX, state.player.stats["hunger"] + drip)
 
 
 def check_game_over(state: GameState) -> GameState:
@@ -274,15 +270,13 @@ def _rollover_month(state: GameState) -> list[str]:
     state.day_of_week = 0  # months always start on Monday
     state.player.workdays_this_month = 0
     state.flags.pop("took_bnpl_this_month", None)
+    state.flags["monthly_expenses"] = []
 
     _, interest_logs = F.apply_monthly_interest(state)
     logs.extend(interest_logs)
 
     _, score_msg = F.update_credit_score(state)
     logs.append(score_msg)
-
-    _, food_logs = F.apply_monthly_food(state)
-    logs.extend(food_logs)
 
     state.calendar.extend(
         seed_month_calendar(state.month, state.house.monthly_rent, has_cc=state.credit_card is not None)
@@ -320,7 +314,9 @@ def advance_day(state: GameState) -> tuple[GameState, list[str]]:
 
     logs: list[str] = []
     _apply_stat_decay(state)
-    _apply_food_drip(state)
+    _, food_log = F.apply_daily_food(state)
+    if food_log:
+        logs.append(food_log)
 
     is_weekday = state.day_of_week < 5
     if is_weekday:

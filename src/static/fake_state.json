@@ -113,8 +113,7 @@
   "flags": {
     "tutorial_seen": true,
     "took_bnpl_this_month": true,
-    "budget": { "food_tier": "normal" },
-    "food_daily_hunger": 4
+    "budget": { "food_tier": "normal" }
   },
   "game_over": null
 }

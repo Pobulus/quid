@@ -462,7 +462,7 @@ def generate_event_via_llm(
 # ---- Ollama HTTP client (B2) ----------------------------------------------------
 
 
-OLLAMA_TIMEOUT_S = 120
+OLLAMA_TIMEOUT_S = 30
 
 
 def call_ollama(system: str, user: str) -> Any:
