@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m venv .venv)",
+      "Bash(.venv/bin/python -m pip install --upgrade pip)",
+      "Bash(/Users/tosia/Developer/quid/.venv/bin/python *)",
+      "Bash(curl -s -X POST http://localhost:8000/api/new-game)"
+    ]
+  }
+}

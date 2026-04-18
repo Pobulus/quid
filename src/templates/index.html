@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-theme="quid">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QUID — Quest for Understanding Income & Debt</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+
+  <style>
+    :root { --neon: #00ffc3; --magenta: #ff0080; --gold: #ffcc00; --base: #0a0a14; }
+    body { background: var(--base); color: #d6d6e0; font-family: 'VT323', monospace; min-height: 100vh; }
+    .pixel { font-family: 'Press Start 2P', system-ui, monospace; letter-spacing: 0.5px; }
+    .phone {
+      width: 360px; height: 720px; border-radius: 36px; padding: 14px;
+      background: #15151f; box-shadow: 0 0 0 2px #2a2a3a, 0 30px 80px rgba(0,255,195,0.08);
+      position: relative;
+    }
+    .phone::before {
+      content: ""; position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      width: 110px; height: 18px; border-radius: 0 0 12px 12px; background: #0a0a14;
+    }
+    .screen {
+      width: 100%; height: 100%; border-radius: 24px; background: #0d0d18;
+      display: flex; flex-direction: column; overflow: hidden; position: relative;
+    }
+    .dock { background: rgba(255,255,255,0.04); border-top: 1px solid rgba(0,255,195,0.15); }
+    .dock-btn { color: #6f6f85; transition: color 0.15s; }
+    .dock-btn.active { color: var(--neon); text-shadow: 0 0 8px var(--neon); }
+    .neon { color: var(--neon); }
+    .magenta { color: var(--magenta); }
+    .gold { color: var(--gold); }
+  </style>
+</head>
+<body class="flex items-center justify-center p-6">
+
+  <div x-data="quid()" x-init="boot()" class="phone">
+    <div class="screen">
+      <header class="px-4 py-3 flex items-center justify-between border-b border-white/5">
+        <span class="pixel text-xs neon">QUID</span>
+        <span class="text-sm" x-text="state ? `M${state.month} D${state.day}` : 'booting…'"></span>
+        <span class="text-sm gold" x-text="state ? money(state.accounts.checking) : '—'"></span>
+      </header>
+
+      <main class="flex-1 p-4 overflow-y-auto">
+        <template x-if="!state">
+          <p class="text-center opacity-60">Loading…</p>
+        </template>
+
+        <template x-if="state">
+          <div class="space-y-3">
+            <h1 class="pixel text-sm magenta">Hello, fresh grad.</h1>
+            <p class="text-lg leading-snug">
+              Day <span class="neon" x-text="state.day"></span>,
+              month <span class="neon" x-text="state.month"></span>.
+              You have <span class="gold" x-text="money(state.accounts.checking)"></span> in checking.
+            </p>
+            <p class="opacity-70 text-sm">
+              Stats — H:<span x-text="state.player.stats.health"></span>
+              Hu:<span x-text="state.player.stats.hunger"></span>
+              S:<span x-text="state.player.stats.sanity"></span>
+              E:<span x-text="state.player.stats.energy"></span>
+            </p>
+            <p class="opacity-50 text-xs">Schema v<span x-text="state.schema_version"></span> · seed <span x-text="state.seed"></span></p>
+
+            <button class="btn btn-sm btn-outline border-white/10 mt-4" @click="newGame()">New game</button>
+          </div>
+        </template>
+      </main>
+
+      <nav class="dock flex justify-around py-3">
+        <button class="dock-btn pixel text-[9px] active">EMAIL</button>
+        <button class="dock-btn pixel text-[9px]">HOME</button>
+        <button class="dock-btn pixel text-[9px]">BANK</button>
+        <button class="dock-btn pixel text-[9px]">HEALTH</button>
+      </nav>
+    </div>
+  </div>
+
+  <script>
+    const SCHEMA_VERSION = 1;
+    const STORAGE_KEY = "quid.state.v1";
+
+    function quid() {
+      return {
+        state: null,
+        async boot() {
+          const cached = localStorage.getItem(STORAGE_KEY);
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              if (parsed.schema_version === SCHEMA_VERSION) {
+                this.state = parsed;
+                return;
+              }
+            } catch (_) {}
+            localStorage.removeItem(STORAGE_KEY);
+          }
+          await this.newGame();
+        },
+        async newGame() {
+          const r = await fetch("/api/new-game", { method: "POST" });
+          const data = await r.json();
+          this.state = data.state;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+        },
+        money(grosze) {
+          return (grosze / 100).toFixed(2) + " z\u0142";
+        },
+      };
+    }
+  </script>
+</body>
+</html>
