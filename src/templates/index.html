@@ -204,8 +204,6 @@
                        :class="productStatus(key) === 'locked_visible' ? 'locked' : ''">
                     <div class="row">
                       <span class="text-sm" x-text="productLabel(key)"></span>
-                      <span :class="productStatus(key) === 'active' ? 'pill' : 'pill dim'"
-                            x-text="productStatus(key) === 'active' ? 'Unlocked' : 'Locked'"></span>
                     </div>
                     <p class="text-xs dim" x-text="productBlurb(key)"></p>
                     <template x-if="productStatus(key) === 'locked_visible'">
