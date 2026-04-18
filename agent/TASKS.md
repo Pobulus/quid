@@ -513,6 +513,112 @@ Products panel `personal_loan` tile opens an amount modal when active; `bnpl` ti
 
 **Owner:** Track B. `generate_event_via_llm(state, call_fn)` is fully wired in `sage.py` but `call_fn` has never been implemented — today the endpoint still uses the deterministic `generate_event` mock. Add a real `call_fn` that POSTs to `{OLLAMA_HOST}/api/chat` with `format: "json"`, the built system/user prompts, and the model from `OLLAMA_MODEL`. Respect `OLLAMA_AVAILABLE` (T3.1). Flip `/api/sage/event` and `advance-until-event` to use the LLM path when available, fall back to `generate_event` otherwise. Keep a 10s timeout; any transport error short-circuits to fallback (the existing pipeline already handles this if the exception leaks).
 
+### T3.16 — Post-event return to Home, not Email
+
+**Owner:** Track C.
+
+After resolving a SAGE event (d20 rolls, outcome shown, player taps "Close"), the UI currently leaves the player in the Email app staring at the inbox. The natural continuation is to push forward in time, not to re-browse mail.
+
+Fix in `quid.js`: when the player closes the resolution panel of an event that arrived via `advanceUntilEvent` (i.e. the "random event of the day" flow), switch `activeApp` to `home` instead of clearing `openEventId` back to the inbox list. Inbox-initiated opens (user clicked a stale unread from the Email list) should still return to the inbox — distinguish via a transient `openedFromAdvance: true` flag set in `advanceUntilEvent` and cleared on close. No backend change.
+
+### T3.17 — Low-stat warning dot + modal
+
+**Owner:** Track C.
+
+Players currently have no peripheral signal that a stat is approaching game-over. Once any of `health`, `hunger`, `sanity`, `energy` drops below 40/100, surface two affordances:
+
+1. An **orange notification dot** on the Health app dock button (same visual as the Email unread dot, different color). Dot is present while **any** stat is `< 40`.
+2. A one-shot **warning toast/modal** the first time a given stat crosses the 40 threshold in the current run. Track "already warned" in `state.flags.stat_warnings_shown: {<stat>: true}` so the modal doesn't re-fire every day while the stat hovers. Reset the entry when the stat climbs back above 50 (hysteresis — avoids chatter from a stat bouncing around the threshold).
+
+Thresholds live in `quid.js` for now. No schema change.
+
+### T3.18 — Rest is passive on day-advance; add "Go to sleep" in Health
+
+**Owner:** Track C + small Track A tweak.
+
+Currently `/api/rest` is an explicit daily action the player must click to spend, which is unnatural — real life doesn't ask you to opt into sleep. Change the model:
+
+- **Track A (`events.advance_day`):** on day tick, if the player did **not** spend their action slot (`actions_today == 1` going in), apply the rest effect passively (`+REST_SANITY`, `+REST_ENERGY`, clamped). Log it as "Slept — recovered sanity/energy." This supersedes the explicit rest-action flow for the common case.
+- **Track C:** remove the "Rest" button from the Health app (it's now implicit). Replace it with a **"Go to sleep"** primary button inside the Health app that calls `/api/advance-day`. Keep the Home-app day-advance buttons for now (they stay as the main loop controls), but Health's button is the one that matches the fiction.
+
+Keep `/api/rest` endpoint around for explicit mid-day naps if we ever want them — just unlink it from the UI for MVP. No schema change.
+
+### T3.20 — Credit card extra / full payment
+
+**Owner:** Track A (backend + endpoint) + Track C (UI).
+
+Track C's C2 spec calls for a "make extra payment" button on the credit card card, but only `finance.charge_credit_card_bill` (the automatic minimum on due day) is wired today. Players can't voluntarily pay down the balance, which makes interest unavoidable and the `cc_paid_in_full_3mo` behavioral unlock unreachable.
+
+**Backend:** Add `finance.pay_credit_card(state, amount)` (pure). Validates `state.credit_card is not None`, `amount > 0`, `amount <= state.credit_card.balance`, and `amount <= state.accounts.checking`; raises `ValueError` otherwise. Decrements both, increments `flags.cc_payments_made` **only** if `amount >= min_payment` at time of call (so extra partial payments don't game the credit-score history). Appends to `monthly_expenses` as "CC payment". Returns `(state, message)`.
+
+Endpoint: `POST /api/cc-pay` with `{state, amount}` → `{state, message}`; maps `ValueError` → HTTP 400.
+
+**UI:** In the Bank app's existing Credit card card (`templates/index.html`), add two buttons under the balance bar: "Pay balance in full" (amount = current balance, disabled if checking can't cover) and "Pay extra…" (opens a small PLN amount modal, mirrors the transfer-modal pattern). Both call `applyCreditCardPayment(amount)` in `quid.js`, which POSTs `/api/cc-pay`, replaces state, and toasts the message. No schema change.
+
+Tests: one success path, one rejection each for no-CC / over-balance / over-checking / non-positive.
+
+### T3.21 — House move: upgrade / downgrade
+
+**Owner:** Track A (backend + endpoint) + Track C (UI).
+
+`UNLOCK_TIERS` gates `move_decent_rental` and `move_nice_rental` by net worth, but there's no player-triggered move path — the Home app shows the current tier and nothing else. Players need to be able to **upgrade** (shoddy → decent → nice) when they hit the net-worth threshold, and **downgrade** (nice → decent → shoddy) when they can't keep paying rent on the current tier. Both directions cost money (deposit + moving fees — a real tax on churning).
+
+**Balance:** add to `balance.py`:
+
+```
+MOVE_COSTS = {  # grosze
+    "upgrade":   {"deposit": 2 * rent_of_new_tier, "moving_fee": 50000},   # ~500 PLN
+    "downgrade": {"moving_fee": 30000},                                     # ~300 PLN, deposit refunded
+}
+```
+
+Deposit is returned to savings when moving out (shoddy tier has no prior deposit on a fresh grad; track `flags.house_deposit_paid: int` so downgrades can refund correctly — 0 if never upgraded).
+
+**Backend:** `finance.move_house(state, target_tier)` (pure). Validates target ∈ `HOUSE_TIERS`, differs from current tier, player has funds for the move, and — if upgrading — the new tier's unlock is in `available_products(state)`. Deducts moving fee + deposit (for upgrades) / deducts moving fee and refunds prior deposit to checking (for downgrades). Mutates `state.house` to the new tier's config and rewrites `monthly_rent` + `shoddiness` + `durability` + `distance_to_work_km` from `HOUSE_TIERS`. Appends to `monthly_expenses` as "Moving". Raises `ValueError` on any failure.
+
+Endpoint: `POST /api/move-house` with `{state, target_tier}` → `{state, message}`; `ValueError` → HTTP 400.
+
+**UI:** In the Home app's house card, add a "Move" button that opens a modal listing all three tiers with their rent, shoddiness/durability, distance, and the computed move cost (upgrade = deposit + fee; downgrade = fee, minus deposit refund). Disabled/greyed for the current tier and for upgrades whose unlock isn't met (show the requirement). Confirm dialog before committing.
+
+Tests: upgrade success, downgrade success + refund, reject when unlock not met, reject when insufficient funds, reject same-tier move.
+
+### T3.22 — Premium savings + fixed-term deposit: open/switch
+
+**Owner:** Track A (backend + endpoint) + Track C (UI).
+
+`UNLOCK_TIERS` exposes `savings_premium` (5k PLN net worth) and `deposit` (10k PLN net worth) but there's no way to actually opt into them. Today `apply_monthly_interest` auto-picks premium vs basic purely from the balance threshold — the player never "opens" a product. That hides the mechanic and blocks the fixed-term deposit entirely.
+
+Change the model to an **explicit savings tier** the player selects, plus a separate fixed-term deposit bucket.
+
+**Schema:** bump `schema_version` → 2 (drop any pre-v2 saves per the standing convention). Extend `Accounts`:
+
+```
+Accounts:
+  checking: int
+  savings: int
+  savings_tier: "basic" | "premium"    # default "basic"
+  deposit: {principal: int, opened_month: int, term_months: int} | None
+```
+
+**Backend:**
+
+- `finance.set_savings_tier(state, tier)` — validates unlock via `available_products` (premium requires `savings_premium` unlocked). Zero-cost switch; effect kicks in on next monthly interest.
+- `finance.open_deposit(state, amount, term_months)` — requires `deposit` unlocked, `state.accounts.deposit is None`, `term_months in {3, 6, 12}` (constants in `balance.py`), `amount <= state.accounts.savings`. Moves `amount` from savings into `accounts.deposit` and stamps `opened_month = state.month`.
+- `finance.close_deposit(state)` — releases principal + accrued interest back to savings. If closed before term, apply early-withdrawal penalty (`DEPOSIT_EARLY_PENALTY_PCT`, in `balance.py`).
+- `apply_monthly_interest` honors `savings_tier` (no more auto-switch) and accrues deposit interest at `DEPOSIT_MONTHLY_RATE` on `accounts.deposit.principal`.
+
+Endpoints: `POST /api/savings-tier` `{state, tier}`, `POST /api/deposit/open` `{state, amount, term_months}`, `POST /api/deposit/close` `{state}`. `ValueError` → 400.
+
+**UI:** Bank app — under Accounts, a "Savings tier: Basic / Premium" toggle (Premium disabled until unlocked, shows requirement when locked). A "Fixed-term deposit" card appears once `deposit` is unlocked: "Open deposit…" button opens a modal with amount input + term radio (3/6/12 months), "Close deposit" button when one exists, with early-withdrawal penalty shown in the confirm dialog if applicable.
+
+Tests: tier switch (allowed / gated), open deposit (success / insufficient savings / already open / unlock not met), close deposit (at term → full interest, early → penalty applied), `apply_monthly_interest` honors explicit tier and accrues deposit.
+
+### T3.19 — Mobile portrait: drop the phone chrome
+
+**Owner:** Track C.
+
+The `.phone` mockup frame is charming on desktop but wastes screen real-estate on actual phones. On narrow portrait viewports (`max-width: 640px` and `orientation: portrait`), render `.screen` directly filling the viewport and hide the `.phone` bezel entirely. Also hide `.dev-bar` on the same breakpoint — judges on mobile don't need export/import/fake-state buttons. Pure CSS change in `quid.css`; no JS. Test both iOS Safari and mobile Chrome viewport emulation before calling done.
+
 -----
 
 ## Cut list (don’t build these)
