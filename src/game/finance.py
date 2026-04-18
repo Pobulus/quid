@@ -203,6 +203,26 @@ def take_loan(state: GameState, kind: str, amount: int) -> tuple[GameState, str]
     return state, f"Took {kind} loan: +{amount/100:.2f} PLN @ {apr*100:.0f}% APR"
 
 
+def transfer(state: GameState, direction: str, amount: int) -> tuple[GameState, str]:
+    """Move integer grosze between checking and savings. Raises ValueError on
+    bad direction, non-positive amount, or insufficient funds in the source."""
+    if not isinstance(amount, int) or amount <= 0:
+        raise ValueError("amount must be a positive integer (grosze)")
+    if direction == "to_savings":
+        if state.accounts.checking < amount:
+            raise ValueError("Not enough in checking to transfer.")
+        state.accounts.checking -= amount
+        state.accounts.savings += amount
+        return state, f"Transferred {amount/100:.2f} PLN to savings."
+    if direction == "to_checking":
+        if state.accounts.savings < amount:
+            raise ValueError("Not enough in savings to transfer.")
+        state.accounts.savings -= amount
+        state.accounts.checking += amount
+        return state, f"Transferred {amount/100:.2f} PLN to checking."
+    raise ValueError(f"unknown direction: {direction}")
+
+
 def apply_for_credit_card(state: GameState, tier: str) -> tuple[GameState, str]:
     """Issue a credit card in the given tier. Raises ValueError if the player
     already has one, the tier is unknown, or the unlock requirements aren't met."""

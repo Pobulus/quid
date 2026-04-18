@@ -69,6 +69,21 @@ def rest(request, payload: dict = Body(...)):
     return _out(state, message=msg)
 
 
+@api.post("/transfer")
+def transfer(request, payload: dict = Body(...)):
+    state = _load(payload)
+    direction = payload.get("direction")
+    try:
+        amount = int(payload.get("amount", 0))
+    except (TypeError, ValueError):
+        raise HttpError(400, "amount must be an integer (grosze)")
+    try:
+        state, msg = finance.transfer(state, direction, amount)
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    return _out(state, message=msg)
+
+
 @api.post("/apply-cc")
 def apply_cc(request, payload: dict = Body(...)):
     state = _load(payload)

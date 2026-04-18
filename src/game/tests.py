@@ -477,6 +477,41 @@ class FinanceTest(TestCase):
         self.assertGreater(s.accounts.savings, 100000)
         self.assertGreater(s.credit_card.balance, 50000)
 
+    def test_transfer_to_savings_moves_money(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 100000
+        s.accounts.savings = 0
+        s, msg = finance.transfer(s, "to_savings", 40000)
+        self.assertEqual(s.accounts.checking, 60000)
+        self.assertEqual(s.accounts.savings, 40000)
+        self.assertIn("savings", msg)
+
+    def test_transfer_to_checking_moves_money(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 0
+        s.accounts.savings = 50000
+        s, _ = finance.transfer(s, "to_checking", 30000)
+        self.assertEqual(s.accounts.checking, 30000)
+        self.assertEqual(s.accounts.savings, 20000)
+
+    def test_transfer_rejects_insufficient_funds(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 100
+        with self.assertRaises(ValueError):
+            finance.transfer(s, "to_savings", 5000)
+
+    def test_transfer_rejects_non_positive_amount(self):
+        s = new_game(seed=1)
+        with self.assertRaises(ValueError):
+            finance.transfer(s, "to_savings", 0)
+        with self.assertRaises(ValueError):
+            finance.transfer(s, "to_savings", -1)
+
+    def test_transfer_rejects_unknown_direction(self):
+        s = new_game(seed=1)
+        with self.assertRaises(ValueError):
+            finance.transfer(s, "sideways", 100)
+
     def test_apply_for_credit_card_starter_unlocks_and_seeds_calendar(self):
         s = new_game(seed=1)
         s.credit_score = 620
