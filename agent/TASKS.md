@@ -377,7 +377,7 @@ Buttons: “New game” (confirm), “Export save” (download JSON), “Import 
 
 ### T3.3 — Demo script
 
-Hardcoded seed + scripted opening scenario for the demo: starts with a tempting BNPL offer in the inbox so judges see the “unforgiving” nature within 30 seconds.
+**Owner:** Track A. Hardcoded seed + scripted opening scenario for the demo: starts with a tempting BNPL offer in the inbox so judges see the “unforgiving” nature within 30 seconds.
 
 ### T3.4 — Cyberpunk theme pass
 
@@ -385,7 +385,7 @@ DaisyUI custom theme: base `#0a0a14`, primary `#00ffc3`, secondary `#ff0080`, ac
 
 ### T3.5 — Bug bash
 
-Play through 3 months start to finish. Fix anything that crashes. Accept jank that doesn’t crash.
+**Owner:** Track A. Play through 3 months start to finish. Fix anything that crashes. Accept jank that doesn’t crash.
 
 ### T3.6 — Remove slug from SAGE prompt — assign UUID server-side
 
@@ -420,7 +420,10 @@ Fix: in `quid.js`, after `lastResolution` is set for the open event, hide option
 - **Dev B** — Track B (SAGE). Isolated, prompt-heavy, lots of Ollama debugging.
 - **Dev C** — Track C (UI). Starts with fake state, most visual progress early, best candidate to demo.
 
-During integration everyone works together. During Phase 3 split by affinity (A+B fix backend bugs, C does theme).
+During integration everyone works together. Phase 3 split (no shared tasks):
+- **Track A:** T3.3 Demo script, T3.5 Bug bash.
+- **Track B:** T3.1 Ollama boot check, T3.6 Drop slug / server-side event_id.
+- **Track C:** T2.1 Set Budget modal, T3.2 Save/export/import, T3.4 Cyberpunk theme, T3.7 **[URGENT]** Lock resolved events.
 
 -----
 
