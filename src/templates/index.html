@@ -37,7 +37,7 @@
           <!-- ===== status bar ===== -->
           <header class="status-bar">
             <span class="pixel text-[10px] neon">QUID</span>
-            <span class="dim">
+            <span class="dim date-cluster" :class="dayPulse ? 'date-pulse' : ''">
               <span x-text="dayName(state.day_of_week)"></span>
               · <span x-text="monthName(state.month)"></span>
               <span x-text="state.day"></span>
@@ -462,6 +462,25 @@
                 <button class="btn-q mag" :disabled="budgetSaving" @click="saveBudget()">
                   <span x-text="budgetSaving ? 'Saving…' : 'Save budget'"></span>
                 </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- ===== day advance popup (Persona3-style) ===== -->
+          <template x-if="dayAdvanceAnim">
+            <div class="day-advance-overlay" @click="clearTimeout(dayAdvanceTimer); dayAdvanceAnim = null">
+              <div class="da-stripe da-stripe-1"></div>
+              <div class="da-stripe da-stripe-2"></div>
+              <div class="da-content">
+                <div class="da-dow pixel" x-text="dayName(dayAdvanceAnim.to.dow)"></div>
+                <div class="da-date">
+                  <span class="da-month pixel" x-text="monthName(dayAdvanceAnim.to.month)"></span>
+                  <span class="da-day-wrap">
+                    <span class="da-day da-day-old pixel" x-text="dayAdvanceAnim.from.day"></span>
+                    <span class="da-day da-day-new pixel" x-text="dayAdvanceAnim.to.day"></span>
+                  </span>
+                </div>
+                <div class="da-tag pixel">NEXT DAY</div>
               </div>
             </div>
           </template>

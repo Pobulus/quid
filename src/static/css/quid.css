@@ -387,6 +387,164 @@ body {
   border-color: var(--neon);
 }
 
+/* ---- Day pulse in status bar ---- */
+
+@keyframes datePulse {
+  0%   { transform: scale(1);   text-shadow: none; color: var(--fg-dim); }
+  25%  { transform: scale(1.18); color: var(--neon); text-shadow: 0 0 10px var(--neon), 0 0 20px var(--neon); }
+  60%  { transform: scale(1.08); color: var(--neon); text-shadow: 0 0 6px var(--neon); }
+  100% { transform: scale(1);   text-shadow: none; color: var(--fg-dim); }
+}
+
+.date-cluster {
+  display: inline-block;
+  transform-origin: center;
+  will-change: transform, text-shadow, color;
+}
+
+.date-pulse {
+  animation: datePulse 1.1s ease-out;
+}
+
+/* ---- Day advance popup (Persona3-style) ---- */
+
+.day-advance-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  overflow: hidden;
+  pointer-events: auto;
+  border-radius: 28px;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 0, 128, 0.25) 0%, rgba(5, 0, 10, 0.92) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: daFadeOut 1.8s ease forwards;
+}
+
+@keyframes daFadeOut {
+  0%, 75% { opacity: 1; }
+  100%    { opacity: 0; }
+}
+
+.da-stripe {
+  position: absolute;
+  left: -40%;
+  width: 200%;
+  height: 80px;
+  background: linear-gradient(90deg, transparent, var(--magenta), var(--neon), transparent);
+  opacity: 0.7;
+  mix-blend-mode: screen;
+  filter: blur(1px);
+}
+
+.da-stripe-1 {
+  top: 30%;
+  transform: rotate(-12deg);
+  animation: daSwipe 0.7s cubic-bezier(0.3, 0, 0.2, 1) forwards;
+}
+
+.da-stripe-2 {
+  top: 55%;
+  transform: rotate(-12deg);
+  animation: daSwipe 0.7s 0.08s cubic-bezier(0.3, 0, 0.2, 1) forwards;
+  opacity: 0.5;
+}
+
+@keyframes daSwipe {
+  0%   { transform: translateX(-120%) rotate(-12deg); }
+  100% { transform: translateX(0%)    rotate(-12deg); }
+}
+
+.da-content {
+  position: relative;
+  z-index: 2;
+  transform: rotate(-6deg);
+  text-align: center;
+  color: var(--fg);
+  animation: daPop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+
+@keyframes daPop {
+  0%   { transform: rotate(-6deg) scale(0.4); opacity: 0; }
+  60%  { transform: rotate(-6deg) scale(1.15); opacity: 1; }
+  100% { transform: rotate(-6deg) scale(1);    opacity: 1; }
+}
+
+.da-dow {
+  font-size: 14px;
+  color: var(--neon);
+  text-shadow: 0 0 10px var(--neon);
+  letter-spacing: 3px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.da-date {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+}
+
+.da-month {
+  font-size: 18px;
+  color: var(--magenta);
+  text-shadow: 0 0 12px var(--magenta);
+  text-transform: uppercase;
+}
+
+.da-day-wrap {
+  position: relative;
+  display: inline-block;
+  width: 1.4em;
+  height: 1em;
+  font-size: 56px;
+  line-height: 1;
+  vertical-align: baseline;
+}
+
+.da-day {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  color: var(--gold);
+  text-shadow: 0 0 14px var(--gold), 0 0 28px var(--magenta);
+}
+
+.da-day-old {
+  animation: daDayOut 0.55s 0.15s cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+
+.da-day-new {
+  opacity: 0;
+  animation: daDayIn 0.5s 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+
+@keyframes daDayOut {
+  0%   { transform: translateY(0);     opacity: 1; }
+  100% { transform: translateY(-80%);  opacity: 0; }
+}
+
+@keyframes daDayIn {
+  0%   { transform: translateY(80%);   opacity: 0; }
+  60%  { transform: translateY(-6%);   opacity: 1; }
+  100% { transform: translateY(0);     opacity: 1; }
+}
+
+.da-tag {
+  margin-top: 12px;
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--fg);
+  background: var(--magenta);
+  display: inline-block;
+  padding: 4px 10px;
+  transform: skewX(-10deg);
+  box-shadow: 0 0 12px rgba(255, 0, 128, 0.7);
+}
+
 /* ---- Roll animation ---- */
 
 @keyframes rollPulse {

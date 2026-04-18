@@ -138,6 +138,10 @@ function quid() {
     budgetModalOpen: false,
     budgetDraft: { food_tier: FOOD_DEFAULT_TIER, leisure: 0, bills_buffer: 0 },
     budgetSaving: false,
+    dayPulse: false,
+    dayPulseTimer: null,
+    dayAdvanceAnim: null,     // { from: {day,month,dow}, to: {day,month,dow} } while popup is up
+    dayAdvanceTimer: null,
 
     statList: ["health","hunger","sanity","energy"].map(k => ({ key: k, icon: STAT_ICONS[k] })),
     skillList: ["cooking","handiwork","charisma","physique"].map(k => ({ key: k, icon: SKILL_ICONS[k] })),
@@ -355,9 +359,40 @@ function quid() {
       }
     },
 
-    async advanceDay()        { await this.postAction("/api/advance-day"); },
+    dateSnapshot() {
+      if (!this.state) return null;
+      return { day: this.state.day, month: this.state.month, dow: this.state.day_of_week };
+    },
+
+    triggerDayAdvanceAnim(before) {
+      if (!before || !this.state) return;
+      const after = this.dateSnapshot();
+      if (before.day === after.day && before.month === after.month) return;
+
+      // Pulse date in status bar.
+      clearTimeout(this.dayPulseTimer);
+      this.dayPulse = false;
+      // Re-trigger CSS animation on next frame.
+      requestAnimationFrame(() => {
+        this.dayPulse = true;
+        this.dayPulseTimer = setTimeout(() => { this.dayPulse = false; }, 1200);
+      });
+
+      // Persona3-style popup.
+      clearTimeout(this.dayAdvanceTimer);
+      this.dayAdvanceAnim = { from: before, to: after };
+      this.dayAdvanceTimer = setTimeout(() => { this.dayAdvanceAnim = null; }, 1800);
+    },
+
+    async advanceDay() {
+      const before = this.dateSnapshot();
+      await this.postAction("/api/advance-day");
+      this.triggerDayAdvanceAnim(before);
+    },
     async advanceUntilEvent() {
+      const before = this.dateSnapshot();
       const data = await this.postAction("/api/advance-until-event");
+      this.triggerDayAdvanceAnim(before);
       if (!data) return;
       if (data.event) {
         this.activeApp = "email";
