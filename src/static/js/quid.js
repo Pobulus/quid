@@ -344,6 +344,45 @@ function quid() {
     productLabel(key)  { return PRODUCT_LABELS[key]?.name ?? key; },
     productBlurb(key)  { return PRODUCT_LABELS[key]?.blurb ?? ""; },
 
+    productOwned(key) {
+      if (key === "cc_starter" || key === "cc_better") {
+        return !!this.state?.credit_card;
+      }
+      return false;
+    },
+
+    productClickable(key) {
+      if (key !== "cc_starter" && key !== "cc_better") return false;
+      if (this.productStatus(key) !== "active") return false;
+      return !this.productOwned(key);
+    },
+
+    onProductClick(key) {
+      if (key === "cc_starter") return this.applyForCreditCard("starter");
+      if (key === "cc_better")  return this.applyForCreditCard("better");
+    },
+
+    async applyForCreditCard(tier) {
+      const label = tier === "starter" ? "starter credit card" : "premium credit card";
+      if (!confirm(`Apply for the ${label}?`)) return;
+      try {
+        const r = await fetch("/api/apply-cc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: this.state, tier }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.showToast(data.detail || `Error ${r.status} from /api/apply-cc.`);
+          return;
+        }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.showToast(data.message || "Credit card approved.");
+      } catch (_) {
+        this.showToast("Network error.");
+      }
+    },
+
     // ---- skill checks ----
 
     skillValue(skill) { return this.state?.player.skills[skill] ?? 0; },

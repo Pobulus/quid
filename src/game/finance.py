@@ -203,6 +203,47 @@ def take_loan(state: GameState, kind: str, amount: int) -> tuple[GameState, str]
     return state, f"Took {kind} loan: +{amount/100:.2f} PLN @ {apr*100:.0f}% APR"
 
 
+def apply_for_credit_card(state: GameState, tier: str) -> tuple[GameState, str]:
+    """Issue a credit card in the given tier. Raises ValueError if the player
+    already has one, the tier is unknown, or the unlock requirements aren't met."""
+    if state.credit_card is not None:
+        raise ValueError("You already have a credit card.")
+    if tier == "starter":
+        unlock_key = "cc_starter"
+        limit, apr = B.CC_STARTER_LIMIT, B.CC_STARTER_APR
+    elif tier == "better":
+        unlock_key = "cc_better"
+        limit, apr = B.CC_BETTER_LIMIT, B.CC_BETTER_APR
+    else:
+        raise ValueError(f"unknown credit card tier: {tier}")
+
+    if unlock_key not in available_products(state):
+        raise ValueError(f"{unlock_key} unlock requirements not met")
+
+    state.credit_card = CreditCard(
+        limit=limit,
+        balance=0,
+        apr=apr,
+        due_day=B.CC_DUE_DAY,
+        min_payment_pct=B.CC_MIN_PAYMENT_PCT,
+    )
+    # Seed cc_due for the current month if not already present.
+    has_cc_due_this_month = any(
+        e.kind == "cc_due" and e.month == state.month for e in state.calendar
+    )
+    if not has_cc_due_this_month:
+        state.calendar.append(
+            CalendarEvent(
+                day=B.CC_DUE_DAY,
+                month=state.month,
+                kind="cc_due",
+                amount=0,
+                auto_resolve=True,
+            )
+        )
+    return state, f"Approved: {tier} credit card, limit {limit/100:.0f} PLN @ {apr*100:.0f}% APR"
+
+
 def take_bnpl(state: GameState, amount: int) -> tuple[GameState, str]:
     due_day = (state.day + B.BNPL_GRACE_DAYS - 1) % B.MONTH_LEN + 1
     state.loans.append(

@@ -477,6 +477,36 @@ class FinanceTest(TestCase):
         self.assertGreater(s.accounts.savings, 100000)
         self.assertGreater(s.credit_card.balance, 50000)
 
+    def test_apply_for_credit_card_starter_unlocks_and_seeds_calendar(self):
+        s = new_game(seed=1)
+        s.credit_score = 620
+        s.calendar = [e for e in s.calendar if e.kind != "cc_due"]
+        s, msg = finance.apply_for_credit_card(s, "starter")
+        self.assertIsNotNone(s.credit_card)
+        self.assertEqual(s.credit_card.limit, B.CC_STARTER_LIMIT)
+        self.assertEqual(s.credit_card.apr, B.CC_STARTER_APR)
+        self.assertEqual(s.credit_card.due_day, B.CC_DUE_DAY)
+        self.assertTrue(any(e.kind == "cc_due" and e.month == s.month for e in s.calendar))
+        self.assertIn("starter", msg)
+
+    def test_apply_for_credit_card_rejects_duplicate(self):
+        s = new_game(seed=1)
+        s.credit_score = 620
+        finance.apply_for_credit_card(s, "starter")
+        with self.assertRaises(ValueError):
+            finance.apply_for_credit_card(s, "starter")
+
+    def test_apply_for_credit_card_rejects_unlock_not_met(self):
+        s = new_game(seed=1)
+        s.credit_score = 500  # below CC_STARTER unlock (600)
+        with self.assertRaises(ValueError):
+            finance.apply_for_credit_card(s, "starter")
+
+    def test_apply_for_credit_card_rejects_unknown_tier(self):
+        s = new_game(seed=1)
+        with self.assertRaises(ValueError):
+            finance.apply_for_credit_card(s, "platinum")
+
     def test_available_products_gates_by_score_and_networth(self):
         s = new_game(seed=1)
         s.credit_score = 600
