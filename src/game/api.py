@@ -98,6 +98,23 @@ def sage_event(request, payload: dict = Body(...)):
     return {"state": state.to_dict(), "event": event, "probability": prob, "source": source}
 
 
+@api.post("/sage/prefetch")
+def sage_prefetch(request, payload: dict = Body(...)):
+    """Generate one event in the background and return it.
+
+    Client fires this while the user is idle; on success it appends the event
+    to its local `state.flags.event_queue`. The server does NOT return a new
+    state — the client's state may have moved on by the time this returns, so
+    we only hand back the validated event payload.
+    """
+    state = _load(payload)
+    if sage.OLLAMA_AVAILABLE:
+        event, source = sage.generate_single_event_via_llm(state, sage.call_ollama)
+    else:
+        event, source = sage.generate_event(state), "fallback"
+    return {"event": event, "source": source}
+
+
 @api.post("/event/resolve")
 def event_resolve(request, payload: dict = Body(...)):
     state = _load(payload)
