@@ -217,9 +217,14 @@
                 <template x-for="key in ['cc_starter','personal_loan','savings_premium','cc_better','deposit','investments','mortgage']" :key="key">
                   <div class="card-tight"
                        style="background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;"
-                       :class="productStatus(key) === 'locked_visible' ? 'locked' : ''">
+                       :class="[productStatus(key) === 'locked_visible' ? 'locked' : '', productClickable(key) ? 'clickable' : '']"
+                       :style="productClickable(key) ? 'cursor:pointer;' : ''"
+                       @click="productClickable(key) && onProductClick(key)">
                     <div class="row">
                       <span class="text-sm" x-text="productLabel(key)"></span>
+                      <template x-if="productClickable(key)">
+                        <span class="pill" x-text="productOwned(key) ? 'Owned' : 'Apply'"></span>
+                      </template>
                     </div>
                     <p class="text-xs dim" x-text="productBlurb(key)"></p>
                     <template x-if="productStatus(key) === 'locked_visible'">

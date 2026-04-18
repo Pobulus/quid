@@ -3,7 +3,7 @@ import random
 from ninja import Body, NinjaAPI
 from ninja.errors import HttpError
 
-from game import sage,events
+from game import sage, events, finance
 from game.state import GameState, new_game
 
 api = NinjaAPI(title="QUID API")
@@ -66,6 +66,17 @@ def practice_skill(request, payload: dict = Body(...)):
 def rest(request, payload: dict = Body(...)):
     state = _load(payload)
     state, msg = events.rest(state)
+    return _out(state, message=msg)
+
+
+@api.post("/apply-cc")
+def apply_cc(request, payload: dict = Body(...)):
+    state = _load(payload)
+    tier = payload.get("tier")
+    try:
+        state, msg = finance.apply_for_credit_card(state, tier)
+    except ValueError as e:
+        raise HttpError(400, str(e))
     return _out(state, message=msg)
 
 
