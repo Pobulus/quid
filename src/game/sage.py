@@ -329,7 +329,6 @@ class _Option(BaseModel):
     skill_check: Optional[_SkillCheck] = None
     effects_on_success: dict[str, int]
     effects_on_failure: dict[str, int]
-    hint: str = ""
 
     @field_validator("effects_on_success", "effects_on_failure")
     @classmethod
