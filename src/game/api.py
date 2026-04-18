@@ -17,8 +17,9 @@ def _out(state: GameState, **extra) -> dict:
 
 
 @api.post("/new-game")
-def new_game_endpoint(request):
-    return {"state": new_game().to_dict()}
+def new_game_endpoint(request, payload: dict | None = Body(None)):
+    demo = bool((payload or {}).get("demo", False))
+    return {"state": new_game(demo=demo).to_dict()}
 
 
 @api.post("/echo")

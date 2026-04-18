@@ -148,6 +148,15 @@ class InteractiveLoanInboxTest(TestCase):
         self.assertEqual(s.inbox[0].status, "unread")
         self.assertEqual(s.loans[0].payments_missed, missed_before + 1)
 
+    def test_demo_new_game_seeds_opening_event(self):
+        s = new_game(demo=True)
+        self.assertEqual(s.seed, B.DEMO_SEED)
+        self.assertEqual(len(s.inbox), 1)
+        ref = s.inbox[0]
+        self.assertEqual(ref.event["slug"], "demo_opening_bnpl")
+        self.assertEqual(ref.status, "unread")
+        self.assertEqual(len(ref.event["options"]), 3)
+
     def test_pay_now_succeeds_when_cash_arrived(self):
         s = self._state_with_missed_loan(checking=0, savings=0)
         eid = s.inbox[0].event_id
