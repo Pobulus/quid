@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>QUID — Quest for Understanding Income & Debt</title>
-
+  <link rel="icon" href="{% static 'img/favicon.ico' %}">
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://unpkg.com/htmx.org@1.9.12"></script>
@@ -221,15 +221,18 @@
 
               <div class="card col g-6">
                 <span class="sub-h">Stats</span>
-                <template x-for="key in ['health','hunger','sanity','energy']" :key="key">
+                <template x-for="s in statList" :key="s.key">
                   <div class="col g-4">
                     <div class="row text-xs">
-                      <span class="capitalize" x-text="key"></span>
-                      <span x-text="state.player.stats[key] + ' / 100'"></span>
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <img :src="s.icon" class="stat-icon" :alt="s.key" />
+                        <span class="capitalize" x-text="s.key"></span>
+                      </div>
+                      <span x-text="state.player.stats[s.key] + ' / 100'"></span>
                     </div>
                     <div class="bar"
-                         :class="state.player.stats[key] < 25 ? 'bad' : (state.player.stats[key] < 50 ? 'warn' : '')">
-                      <span :style="`width: ${Math.max(0, Math.min(100, state.player.stats[key]))}%`"></span>
+                         :class="state.player.stats[s.key] < 25 ? 'bad' : (state.player.stats[s.key] < 50 ? 'warn' : '')">
+                      <span :style="`width: ${Math.max(0, Math.min(100, state.player.stats[s.key]))}%`"></span>
                     </div>
                   </div>
                 </template>
@@ -237,21 +240,24 @@
 
               <div class="card col g-6">
                 <span class="sub-h">Skills</span>
-                <template x-for="skill in ['cooking','handiwork','charisma','physique']" :key="skill">
+                <template x-for="sk in skillList" :key="sk.key">
                   <div class="col g-4">
                     <div class="row text-xs">
-                      <span class="capitalize" x-text="skill"></span>
-                      <span x-text="'LV ' + state.player.skills[skill] + ' / 10'"></span>
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <img :src="sk.icon" class="stat-icon" :alt="sk.key" />
+                        <span class="capitalize" x-text="sk.key"></span>
+                      </div>
+                      <span x-text="'LV ' + state.player.skills[sk.key] + ' / 10'"></span>
                     </div>
                     <div class="bar gold">
-                      <span :style="`width: ${state.player.skills[skill] * 10}%`"></span>
+                      <span :style="`width: ${state.player.skills[sk.key] * 10}%`"></span>
                     </div>
                     <div class="row text-[10px] dim">
-                      <span x-text="(state.player.skill_practice_counts[skill] || 0) + ' attempt(s) at this level'"></span>
+                      <span x-text="(state.player.skill_practice_counts[sk.key] || 0) + ' attempt(s) at this level'"></span>
                       <button class="btn-q muted"
                               style="padding: 4px 8px; font-size: 8px;"
                               :disabled="state.actions_today === 0"
-                              @click="practiceSkill(skill)">
+                              @click="practiceSkill(sk.key)">
                         Practice
                       </button>
                     </div>
@@ -405,19 +411,19 @@
             <button class="dock-btn" style="position:relative" :class="activeApp === 'email' ? 'active' : ''" @click="setApp('email')">
               <span class="unread-dot" x-show="unreadCount > 0"
                     style="position:absolute; top:2px; right:10px; width:7px; height:7px;"></span>
-              <span class="icon">✉</span>
+              <img src="{% static 'img/app_mail.png' %}" class="dock-icon" alt="Email" />
               <span class="pixel">EMAIL</span>
             </button>
             <button class="dock-btn" :class="activeApp === 'home' ? 'active' : ''" @click="setApp('home')">
-              <span class="icon">⌂</span>
+              <img src="{% static 'img/app_home.png' %}" class="dock-icon" alt="Home" />
               <span class="pixel">HOME</span>
             </button>
             <button class="dock-btn" :class="activeApp === 'bank' ? 'active' : ''" @click="setApp('bank')">
-              <span class="icon">₿</span>
+              <img src="{% static 'img/app_bank.png' %}" class="dock-icon" alt="Bank" />
               <span class="pixel">BANK</span>
             </button>
             <button class="dock-btn" :class="activeApp === 'health' ? 'active' : ''" @click="setApp('health')">
-              <span class="icon">♥</span>
+              <img src="{% static 'img/app_health.png' %}" class="dock-icon" alt="Health" />
               <span class="pixel">HEALTH</span>
             </button>
           </nav>

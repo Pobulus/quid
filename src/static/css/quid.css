@@ -397,6 +397,33 @@ body {
   z-index: 15;
 }
 
+/* ---- Icons ---- */
+
+.dock-icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  filter: grayscale(0.4) brightness(1) saturate(3);
+  transition: filter 0.15s;
+}
+
+.dock-btn.active .dock-icon {
+  filter: grayscale(0) brightness(1.1) drop-shadow(0 0 4px var(--neon));
+}
+
+.dock-btn:hover:not(.active) .dock-icon {
+  filter: grayscale(0.1) brightness(2.2) saturate(3.5);
+}
+
+.stat-icon {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  opacity: 0.85;
+}
+
 /* ---- Utility ---- */
 
 .divider { height: 1px; background: var(--line); margin: 8px 0; }
