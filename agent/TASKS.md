@@ -399,6 +399,32 @@ Fix in `sage.py`: remove `slug` from the prompt schema and the Pydantic `_Event`
 
 Fix: in `quid.js`, after `lastResolution` is set for the open event, hide option cards and the roll button. Use `x-show="!lastResolution"` guard on the options section and `x-show="lastResolution"` on the resolution panel. No backend change required — UI lock is sufficient for MVP. Optionally, mark the `EventRef` in inbox as `status: "resolved"` so the lock survives page reload.
 
+### T3.8 — Force budget selection at month start
+
+**Owner:** Track C (UI) + Track A (backend gate).
+
+Currently the player can advance days without ever setting a budget. Budget must be mandatory at the start of each month (after payday fires on day 28, before day 1 of the next month can proceed).
+
+**Backend (`events.py`):** In `advance_day`, before ticking the day, check: if `state.month > 1` (or a rollover just happened) and `state.flags.get("budget_set_month") != state.month`, return early with an error log `"budget_required"` and do NOT advance. Set `state.flags["budget_set_month"] = state.month` inside `/api/set-budget` after storing the budget.
+
+**Frontend (`quid.js`):** If `advance_day` or `advance_until_event` response contains `reason == "budget_required"` (or a log entry with that string), open the budget modal automatically instead of showing a toast. Modal must not be dismissable without submitting.
+
+### T3.9 — Budget actually deducts money and applies stat effects
+
+**Owner:** Track A (backend).
+
+Currently `/api/set-budget` only stores values in `flags` — no money is deducted and no stats change.
+
+**Fix in `finance.py`:** Add `apply_monthly_budget(state)` pure function called from `events._rollover_month` (after payday, when the new month budget is available). It should:
+
+1. Look up `food_tier` from `state.flags["budget"]` (default `"normal"` if not set).
+2. Charge `FOOD_TIERS[tier]["monthly_cost"]` from `state.accounts.checking`. If insufficient, walk down to cheapest affordable tier (already exists as `apply_monthly_food` logic — consolidate or reuse).
+3. Apply the one-shot stat deltas for the chosen tier (`FOOD_TIERS[tier]["health_delta"]`, etc.) clamped to stat bounds.
+4. Set `state.flags["food_daily_hunger"] = FOOD_TIERS[tier]["daily_hunger_drip"]` so the daily drip continues.
+5. Record the food expense in a new `state.flags["monthly_expenses"]` list: `[{"label": "Food (normal)", "amount": 45000}, ...]`. Rent, heating, and CC bill charges should also append here when they fire.
+
+**Frontend:** Home app calendar / Bank app should render `state.flags["monthly_expenses"]` as an expense breakdown list so the player can see where money went.
+
 -----
 
 ## Cut list (don’t build these)
