@@ -337,7 +337,7 @@
               <template x-if="openEvent">
                 <div class="col g-8">
                   <button class="btn-q muted" style="align-self:flex-start; padding: 4px 10px; font-size: 8px;"
-                          @click="openEventId = null; lastResolution = null">
+                          @click="closeOpenEvent()">
                     ← Back
                   </button>
 
@@ -411,7 +411,7 @@
                         <span class="text-[10px] dim">local resolution — /api/event/resolve not wired yet</span>
                       </template>
 
-                      <button class="btn-q mt-2" @click="openEventId = null; lastResolution = null">Close</button>
+                      <button class="btn-q mt-2" @click="closeOpenEvent()">Close</button>
                     </div>
                   </template>
                 </div>

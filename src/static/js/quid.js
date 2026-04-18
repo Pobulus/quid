@@ -135,6 +135,7 @@ function quid() {
     toast: null,
     toastTimer: null,
     openEventId: null,
+    openedFromAdvance: false, // true when event was opened via advanceUntilEvent → close returns to Home
     lastResolution: null,     // { option_id, rolled, dc, passed, effects }
     rollingEventId: null,     // while animating
     transferModalOpen: false,
@@ -224,6 +225,7 @@ function quid() {
     setApp(name) {
       this.activeApp = name;
       this.openEventId = null;
+      this.openedFromAdvance = false;
       this.lastResolution = null;
     },
 
@@ -310,7 +312,16 @@ function quid() {
 
     openEventRef(ref) {
       this.openEventId = ref.event_id;
+      this.openedFromAdvance = false;
       this.lastResolution = ref.resolution ?? null;
+    },
+
+    closeOpenEvent() {
+      const fromAdvance = this.openedFromAdvance;
+      this.openEventId = null;
+      this.lastResolution = null;
+      this.openedFromAdvance = false;
+      if (fromAdvance) this.activeApp = "home";
     },
 
     // ---- credit score gauge ----
@@ -518,6 +529,7 @@ function quid() {
       if (data.event) {
         this.activeApp = "email";
         this.openEventId = data.event.event_id;
+        this.openedFromAdvance = true;
         this.lastResolution = null;
         this.showToast("A new event arrived.");
         this.prefetchEvent();
