@@ -385,6 +385,12 @@ DaisyUI custom theme: base `#0a0a14`, primary `#00ffc3`, secondary `#ff0080`, ac
 
 Play through 3 months start to finish. Fix anything that crashes. Accept jank that doesn’t crash.
 
+### T3.6 — **[URGENT]** Lock resolved events (no re-roll)
+
+**Owner:** Track C (UI). Once a player resolves an event (picks option → d20 fires → outcome shown), they can currently roll again — re-rolling changes the outcome retroactively.
+
+Fix: in `quid.js`, after `lastResolution` is set for the open event, hide option cards and the roll button. Use `x-show="!lastResolution"` guard on the options section and `x-show="lastResolution"` on the resolution panel. No backend change required — UI lock is sufficient for MVP. Optionally, mark the `EventRef` in inbox as `status: "resolved"` so the lock survives page reload.
+
 -----
 
 ## Cut list (don’t build these)
