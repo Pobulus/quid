@@ -37,8 +37,8 @@ def advance_day(request, payload: dict = Body(...)):
 @api.post("/advance-until-event")
 def advance_until_event(request, payload: dict = Body(...)):
     state = _load(payload)
-    state, logs, reason = events.advance_until_event(state)
-    return _out(state, logs=logs, reason=reason)
+    state, logs, reason, event = events.advance_until_event(state)
+    return _out(state, logs=logs, reason=reason, event=event)
 
 
 @api.post("/set-budget")

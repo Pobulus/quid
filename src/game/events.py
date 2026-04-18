@@ -6,8 +6,11 @@ fire today's calendar events, roll month over if needed, check game-over.
 
 from __future__ import annotations
 
+import random
+
 from game import balance as B
 from game import finance as F
+from game.sage import event_probability, generate_event, push_to_inbox
 from game.state import GameOver, GameState, seed_month_calendar
 
 
@@ -126,26 +129,42 @@ def advance_day(state: GameState) -> tuple[GameState, list[str]]:
     return state, logs
 
 
-def advance_until_event(state: GameState, max_days: int = 28) -> tuple[GameState, list[str], str]:
+def advance_until_event(
+    state: GameState, max_days: int = 28
+) -> tuple[GameState, list[str], str, dict | None]:
     """Tick days until something notable happens.
 
-    Stopping conditions: game over, month rollover, any log emitted, or max_days hit.
-    Returns (state, logs, reason).
+    Stopping conditions, in priority order per day:
+      1. game over
+      2. month rollover
+      3. SAGE stress roll fires (per `event_probability`)
+      4. max_days exhausted
+
+    Auto-resolve calendar events (payday, rent, heating, cc, loan) fire
+    silently and accumulate into `logs` — they do NOT stop the loop. Once
+    Track A grows calendar events that need decisions ("loan_due, can't
+    afford"), those will push to inbox and we'll add an inbox-growth check.
+
+    Returns (state, logs, reason, event). `event` is the SAGE payload when
+    `reason == "sage_event"`, otherwise None.
     """
     logs: list[str] = []
     days_ticked = 0
+    rng = random.Random()
     while days_ticked < max_days:
         start_month = state.month
         state, day_logs = advance_day(state)
         days_ticked += 1
         logs.extend(day_logs)
         if state.game_over is not None:
-            return state, logs, "game_over"
+            return state, logs, "game_over", None
         if state.month != start_month:
-            return state, logs, "month_rollover"
-        if day_logs:
-            return state, logs, "calendar_event"
-    return state, logs, "max_days"
+            return state, logs, "month_rollover", None
+        if rng.random() < event_probability(state):
+            event = generate_event(state, rng=rng)
+            push_to_inbox(state, event)
+            return state, logs, "sage_event", event
+    return state, logs, "max_days", None
 
 
 # ---- Player actions ------------------------------------------------------------
