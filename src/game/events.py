@@ -301,6 +301,18 @@ def _rollover_month(state: GameState) -> list[str]:
     return logs
 
 
+def budget_required(state: GameState) -> bool:
+    """True when a new-month budget must be set before time can advance.
+
+    Month 1 starts with sensible defaults so the player isn't blocked immediately.
+    From month 2 onward, `/api/set-budget` must stamp `budget_set_month` for the
+    current month before any day-tick endpoint will proceed.
+    """
+    if state.month <= 1:
+        return False
+    return state.flags.get("budget_set_month") != state.month
+
+
 def advance_day(state: GameState) -> tuple[GameState, list[str]]:
     """Advance exactly one day. Returns (state, log lines)."""
     if state.game_over is not None:
@@ -342,10 +354,14 @@ def advance_until_event(
     """
     rng = rng or _rand.Random()
     logs: list[str] = []
+    if budget_required(state):
+        return state, logs, "budget_required", None
     days_ticked = 0
     while days_ticked < max_days:
         start_month = state.month
         state, day_logs = advance_day(state)
+        if budget_required(state):
+            return state, logs + day_logs, "budget_required", None
         days_ticked += 1
         logs.extend(day_logs)
         if state.game_over is not None:
@@ -417,4 +433,5 @@ def set_budget(state: GameState, budget: dict) -> tuple[GameState, str]:
     existing = state.flags.get("budget", {})
     existing.update(stored)
     state.flags["budget"] = existing
+    state.flags["budget_set_month"] = state.month
     return state, f"Budget set for month {state.month}"
