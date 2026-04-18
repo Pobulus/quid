@@ -372,7 +372,10 @@ def advance_until_event(
             return state, logs, "calendar_event", None
         # Quiet day — roll SAGE probability gate.
         if rng.random() < sage.event_probability(state):
-            event = sage.generate_event(state, rng=rng)
+            if sage.OLLAMA_AVAILABLE:
+                event, _src = sage.generate_event_via_llm(state, sage.call_ollama, rng=rng)
+            else:
+                event = sage.generate_event(state, rng=rng)
             sage.push_to_inbox(state, event)
             return state, logs, "sage_event", event
     return state, logs, "max_days", None
