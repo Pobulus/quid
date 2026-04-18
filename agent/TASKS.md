@@ -425,6 +425,31 @@ Currently `/api/set-budget` only stores values in `flags` — no money is deduct
 
 **Frontend:** Home app calendar / Bank app should render `state.flags["monthly_expenses"]` as an expense breakdown list so the player can see where money went.
 
+### T3.10 — Fix payday amount in upcoming calendar display
+
+**Owner:** Track C (UI).
+
+Home app upcoming events list shows payday with amount 0. Root cause: `CalendarEvent.amount` for `payday` is seeded as 0 (salary isn’t known at seeding time — it’s computed at fire time by `finance.pay_salary`). The calendar entry can’t store a precomputed value because workdays aren’t known yet.
+
+**Fix options (pick one):**
+
+- **Option A (backend):** In `seed_month_calendar`, pass `salary_gross_monthly` and store an estimated gross as `amount`. UI labels it "~salary". Actual net may differ (workdays, tax) but ballpark is useful.
+- **Option B (frontend, preferred):** In the upcoming events renderer in `quid.js`, when `ev.kind === "payday"`, compute and display the estimated net from state: `Math.round(state.player.salary_gross_monthly * (1 - state.player.tax_rate))` and label it "est. net salary". Amount field in CalendarEvent stays 0 — no backend change needed.
+
+Use Option B. No schema change, no backend change.
+
+### T3.11 — Expand test coverage where needed
+
+**Owner:** Track A + Track B.
+
+Current test suite (`game/tests.py`) covers practice-skill math (3 tests) and interactive loan inbox (6 tests). Gaps:
+
+- `finance.py`: `pay_salary` net-of-tax, `charge_rent` insufficient-funds path, `update_credit_score` direction (on-time payment vs miss), `net_worth` calculation.
+- `events.py`: `_rollover_month` re-seeds loan_due + month counter; `advance_until_event` returns `"month_rollover"` reason at boundary.
+- `sage.py`: `validate_event` rejects unknown effect key; `validate_event` rejects delta out of bounds; `_validate_batch` assigns UUID event_id; `resolve_event` raises on already-resolved; `resolve_event` applies correct effects branch (pass vs fail).
+
+Add one test class per module (`FinanceTest`, `EventsTest`, `SageTest`). Each test method covers one named behaviour. Aim: every public function in `finance.py` and `sage.py` has at least one passing + one failure-path test. `manage.py test game.tests` must stay green.
+
 -----
 
 ## Cut list (don’t build these)
