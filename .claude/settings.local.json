@@ -4,7 +4,14 @@
       "Bash(python3 -m venv .venv)",
       "Bash(.venv/bin/python -m pip install --upgrade pip)",
       "Bash(/Users/tosia/Developer/quid/.venv/bin/python *)",
-      "Bash(curl -s -X POST http://localhost:8000/api/new-game)"
+      "Bash(curl -s -X POST http://localhost:8000/api/new-game)",
+      "Bash(../.venv/bin/python manage.py test game.tests)",
+      "Bash(../.venv/bin/python manage.py runserver 8765)",
+      "Bash(curl -s -X POST http://localhost:8765/api/new-game)",
+      "Bash(../.venv/bin/python -c \"import sys,json; s=json.load\\(sys.stdin\\); print\\('schema', s['schema_version'], 'day', s['day'], 'month', s['month'], 'checking', s['accounts']['checking']\\)\")",
+      "Bash(curl -s http://localhost:8765/ -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:8765/static/js/quid.js -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:8765/static/css/quid.css -o /dev/null -w \"%{http_code}\\\\n\")"
     ]
   }
 }
