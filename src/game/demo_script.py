@@ -24,7 +24,6 @@ def opening_bnpl_event() -> dict:
                 "skill_check": None,
                 "effects_on_success": {"sanity": 5},
                 "effects_on_failure": {"sanity": 5},
-                "hint": "BNPL kicks in at 40% APR after 30 days. Genuinely bad idea.",
             },
             {
                 "id": "b",
@@ -32,7 +31,6 @@ def opening_bnpl_event() -> dict:
                 "skill_check": {"skill": "charisma", "difficulty_class": 12},
                 "effects_on_success": {"charisma": 1, "sanity": 2},
                 "effects_on_failure": {"sanity": -3},
-                "hint": "Charisma DC 12. Best case: walk away smarter.",
             },
             {
                 "id": "c",
@@ -40,7 +38,6 @@ def opening_bnpl_event() -> dict:
                 "skill_check": None,
                 "effects_on_success": {},
                 "effects_on_failure": {},
-                "hint": "Free.",
             },
         ],
     }

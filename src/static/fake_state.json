@@ -68,7 +68,6 @@
           {
             "id": "opt_diy",
             "label": "Fix it yourself with a YouTube tutorial",
-            "hint": "Risky. If it works: pride + skill. If not: worse boiler.",
             "skill_check": { "skill": "handiwork", "difficulty_class": 14 },
             "effects_on_success": { "sanity": 5, "handiwork": 1, "energy": -5 },
             "effects_on_failure": { "sanity": -8, "money": -12000, "energy": -10 }
@@ -76,7 +75,6 @@
           {
             "id": "opt_cash_guy",
             "label": "Call the cash handyman (150 PLN)",
-            "hint": "Fast, cheap, definitely-not-insured.",
             "skill_check": null,
             "effects_on_success": { "money": -15000, "sanity": 3 },
             "effects_on_failure": { "money": -15000, "sanity": 3 }
@@ -84,7 +82,6 @@
           {
             "id": "opt_wait",
             "label": "Wait for the landlord, take cold showers",
-            "hint": "Free. Miserable.",
             "skill_check": null,
             "effects_on_success": { "sanity": -12, "health": -6, "physique": 1 },
             "effects_on_failure": { "sanity": -12, "health": -6, "physique": 1 }
@@ -103,8 +100,8 @@
         "title": "Pre-approved: split any purchase in 4!",
         "body": "We noticed you could use some *breathing room*. Split any purchase up to 500 PLN into 4 easy payments. 0% for 30 days.",
         "options": [
-          { "id": "opt_accept", "label": "Accept offer", "hint": "Shiny. Dangerous.", "skill_check": null, "effects_on_success": {}, "effects_on_failure": {} },
-          { "id": "opt_ignore", "label": "Ignore", "hint": "Healthy.", "skill_check": null, "effects_on_success": { "sanity": 2 }, "effects_on_failure": { "sanity": 2 } }
+          { "id": "opt_accept", "label": "Accept offer", "skill_check": null, "effects_on_success": {}, "effects_on_failure": {} },
+          { "id": "opt_ignore", "label": "Ignore", "skill_check": null, "effects_on_success": { "sanity": 2 }, "effects_on_failure": { "sanity": 2 } }
         ]
       }
     }
