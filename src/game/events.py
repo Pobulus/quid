@@ -6,9 +6,12 @@ fire today's calendar events, roll month over if needed, check game-over.
 
 from __future__ import annotations
 
+import random as _rand
+
 from game import balance as B
 from game import finance as F
-from game.state import GameOver, GameState, seed_month_calendar
+from game import sage
+from game.state import CalendarEvent, EventRef, GameOver, GameState, seed_month_calendar
 
 
 GAME_OVER_FLAVOR = {
@@ -41,18 +44,62 @@ def check_game_over(state: GameState) -> GameState:
 
 
 def _fire_calendar_for_today(state: GameState) -> list[str]:
-    """Fire (and remove) all auto-resolve calendar events matching today."""
+    """Fire (and remove) calendar events matching today.
+
+    Auto-resolve events fire silently via `_apply_calendar_event`. Non-auto
+    `loan_due` entries attempt a payment and push an informational inbox
+    entry on miss. Other non-auto events are left in place.
+    """
     logs: list[str] = []
     remaining = []
     for ev in state.calendar:
-        if ev.day == state.day and ev.month == state.month and ev.auto_resolve:
+        is_today = ev.day == state.day and ev.month == state.month
+        if is_today and ev.auto_resolve:
             msg = _apply_calendar_event(state, ev)
             if msg:
                 logs.append(msg)
-        else:
-            remaining.append(ev)
+            continue
+        if is_today and ev.kind == "loan_due":
+            msg = _fire_loan_due(state, ev)
+            if msg:
+                logs.append(msg)
+            continue
+        remaining.append(ev)
     state.calendar = remaining
     return logs
+
+
+def _fire_loan_due(state: GameState, ev) -> str:
+    """Find first matching active loan, attempt payment, push inbox on miss."""
+    loan_index = next(
+        (i for i, l in enumerate(state.loans) if l.due_day == ev.day and l.remaining > 0),
+        None,
+    )
+    if loan_index is None:
+        return ""
+    _, msg = F.make_loan_payment(state, loan_index)
+    if "MISSED" in msg:
+        loan = state.loans[loan_index]
+        event_id = f"cal_loan_due_{ev.month}_{ev.day}_{loan_index}"
+        state.inbox.append(
+            EventRef(
+                event_id=event_id,
+                received_day=state.day,
+                received_month=state.month,
+                status="unread",
+                event={
+                    "slug": f"cal_loan_due_m{ev.month}",
+                    "sender": "Bank",
+                    "title": f"Missed {loan.kind} loan payment",
+                    "body": (
+                        f"Your {loan.kind} loan payment of {loan.monthly_payment/100:.2f} PLN "
+                        "was missed due to insufficient funds. This will hurt your credit score."
+                    ),
+                    "options": [],
+                },
+            )
+        )
+    return msg
 
 
 def _apply_calendar_event(state, ev) -> str:
@@ -96,6 +143,17 @@ def _rollover_month(state: GameState) -> list[str]:
     state.calendar.extend(
         seed_month_calendar(state.month, state.house.monthly_rent, has_cc=state.credit_card is not None)
     )
+    for loan in state.loans:
+        if loan.remaining > 0:
+            state.calendar.append(
+                CalendarEvent(
+                    day=loan.due_day,
+                    month=state.month,
+                    kind="loan_due",
+                    amount=loan.monthly_payment,
+                    auto_resolve=False,
+                )
+            )
     return logs
 
 
@@ -126,12 +184,19 @@ def advance_day(state: GameState) -> tuple[GameState, list[str]]:
     return state, logs
 
 
-def advance_until_event(state: GameState, max_days: int = 28) -> tuple[GameState, list[str], str]:
+def advance_until_event(
+    state: GameState,
+    max_days: int = 28,
+    rng: _rand.Random | None = None,
+) -> tuple[GameState, list[str], str, dict | None]:
     """Tick days until something notable happens.
 
-    Stopping conditions: game over, month rollover, any log emitted, or max_days hit.
-    Returns (state, logs, reason).
+    Stopping conditions (in priority): game over, month rollover, any calendar
+    log emitted, SAGE probability roll fires on a quiet day, or `max_days` hit.
+    Returns (state, logs, reason, event_or_none). `event` is non-null only when
+    `reason == "sage_event"`.
     """
+    rng = rng or _rand.Random()
     logs: list[str] = []
     days_ticked = 0
     while days_ticked < max_days:
@@ -140,12 +205,17 @@ def advance_until_event(state: GameState, max_days: int = 28) -> tuple[GameState
         days_ticked += 1
         logs.extend(day_logs)
         if state.game_over is not None:
-            return state, logs, "game_over"
+            return state, logs, "game_over", None
         if state.month != start_month:
-            return state, logs, "month_rollover"
+            return state, logs, "month_rollover", None
         if day_logs:
-            return state, logs, "calendar_event"
-    return state, logs, "max_days"
+            return state, logs, "calendar_event", None
+        # Quiet day — roll SAGE probability gate.
+        if rng.random() < sage.event_probability(state):
+            event = sage.generate_event(state, rng=rng)
+            sage.push_to_inbox(state, event)
+            return state, logs, "sage_event", event
+    return state, logs, "max_days", None
 
 
 # ---- Player actions ------------------------------------------------------------

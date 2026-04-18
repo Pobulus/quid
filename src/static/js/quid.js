@@ -307,18 +307,23 @@ function quid() {
 
     async advanceDay()        { await this.postAction("/api/advance-day"); },
     async advanceUntilEvent() {
-      // Track A's /api/advance-until-event isn't wired yet; while it's missing,
-      // call the SAGE mock directly so the event loop is testable end-to-end.
-      // Once Track A lands, that endpoint will internally call SAGE and this
-      // shortcut can go away.
-      const data = await this.postAction("/api/sage/event", { force: true });
-      if (data && data.event) {
+      const data = await this.postAction("/api/advance-until-event");
+      if (!data) return;
+      if (data.event) {
         this.activeApp = "email";
         this.openEventId = data.event.event_id;
         this.lastResolution = null;
         this.showToast("A new event arrived.");
-      } else if (data) {
-        this.showToast("Quiet day — no event.");
+        return;
+      }
+      if (data.reason === "calendar_event") {
+        this.showToast("Scheduled event fired.");
+      } else if (data.reason === "month_rollover") {
+        this.showToast("New month.");
+      } else if (data.reason === "game_over") {
+        this.showToast("Game over.");
+      } else {
+        this.showToast("Quiet days passed.");
       }
     },
     async summonEvent() {

@@ -345,6 +345,12 @@ Click "advance until event" → server loops day ticks → probability check →
 
 **Owner:** Track A. Calendar events with `auto_resolve: false` (e.g. `loan_due` when the player can't cover it, see fixture `static/fake_state.json`) currently sit in the calendar and never surface. On day tick, if a non-auto event matches today, generate a synthetic inbox entry (`event_id = f"cal_{kind}_{month}_{day}"`, status unread, body + options built from a small template) and leave the calendar entry for next-day retry until resolved. Needed so players can act on loan-due warnings from the Email app instead of them being silent.
 
+**Status:** MVP shipped on branch `t2_track_a` (PR #4) — informational-only inbox entry on miss (`options: []`). Full-spec interactive options tracked as T2.7.
+
+### T2.7 — Interactive missed-loan inbox (T2.6 full-spec)
+
+**Owner:** Track A. Replace the informational-only inbox entry from T2.6 MVP with a real player-actionable one. When `_fire_loan_due` records a miss, push a synthetic event with 4 options: **pay now** (retry `make_loan_payment`), **pay from savings** (shuffle from savings, then pay), **take a payday loan to cover** (`finance.take_loan("payday", …)` + pay), **let it slide** (credit_score −15, sanity −5). Route resolution via `events.resolve_calendar_event(state, event_id, option_id)` — dispatched from `/api/event/resolve` by `cal_*` event-id prefix. `event_id` pattern `cal_loan_due_{month}_{day}_{loan_index}` carries the loan index for the resolver; d20 is ignored for calendar events. No schema change. Option effect dicts are display-only previews; real side effects live in the resolver. Expand `game/tests.py` with one test per option branch. UI template unchanged (inbox already iterates `options`). Full plan: [`agent/reports/t2.7-interactive-loan-inbox.md`](reports/t2.7-interactive-loan-inbox.md).
+
 ### T2.4 — Unlock tiers gate the UI
 
 Bank app reads `available_products(state)` and renders each product as active, lockable (not yet met), or locked-visible (shown as preview with requirement). Both credit score and net worth factor in. Investment tab shows “unlocks at credit score 750 + 20,000 PLN net worth”.

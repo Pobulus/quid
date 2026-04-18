@@ -6,7 +6,7 @@ No I/O, no globals beyond `balance`. Money is always grosze (int).
 from __future__ import annotations
 
 from game import balance as B
-from game.state import CreditCard, GameState, Loan
+from game.state import CalendarEvent, CreditCard, GameState, Loan
 
 
 def _clamp(v: int, lo: int, hi: int) -> int:
@@ -167,6 +167,7 @@ def take_loan(state: GameState, kind: str, amount: int) -> tuple[GameState, str]
         return state, f"unknown loan kind: {kind}"
 
     monthly_payment = max(1, int(amount / 12 * (1 + apr / 2)))  # crude 12-month amort
+    due_day = B.RENT_DUE_DAY + 10
     state.loans.append(
         Loan(
             kind=kind,
@@ -174,16 +175,18 @@ def take_loan(state: GameState, kind: str, amount: int) -> tuple[GameState, str]
             remaining=amount,
             apr=apr,
             monthly_payment=monthly_payment,
-            due_day=B.RENT_DUE_DAY + 10,
+            due_day=due_day,
             payments_made=0,
             payments_missed=0,
         )
     )
     state.accounts.checking += amount
+    _seed_loan_due(state, due_day, monthly_payment)
     return state, f"Took {kind} loan: +{amount/100:.2f} PLN @ {apr*100:.0f}% APR"
 
 
 def take_bnpl(state: GameState, amount: int) -> tuple[GameState, str]:
+    due_day = (state.day + B.BNPL_GRACE_DAYS - 1) % B.MONTH_LEN + 1
     state.loans.append(
         Loan(
             kind="bnpl",
@@ -191,13 +194,22 @@ def take_bnpl(state: GameState, amount: int) -> tuple[GameState, str]:
             remaining=amount,
             apr=0.0,  # becomes BNPL_POST_GRACE_APR after grace days
             monthly_payment=amount,
-            due_day=(state.day + B.BNPL_GRACE_DAYS - 1) % B.MONTH_LEN + 1,
+            due_day=due_day,
             payments_made=0,
             payments_missed=0,
         )
     )
     state.flags["took_bnpl_this_month"] = True
+    due_month = state.month if due_day >= state.day else state.month + 1
+    _seed_loan_due(state, due_day, amount, month=due_month)
     return state, f"BNPL: +{amount/100:.2f} PLN (0% for {B.BNPL_GRACE_DAYS}d)"
+
+
+def _seed_loan_due(state: GameState, due_day: int, amount: int, month: int | None = None) -> None:
+    m = month if month is not None else state.month
+    state.calendar.append(
+        CalendarEvent(day=due_day, month=m, kind="loan_due", amount=amount, auto_resolve=False)
+    )
 
 
 # ---- Credit score --------------------------------------------------------------
