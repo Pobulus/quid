@@ -399,15 +399,19 @@ Fix in `sage.py`: remove `slug` from the prompt schema and the Pydantic `_Event`
 
 Fix: in `quid.js`, after `lastResolution` is set for the open event, hide option cards and the roll button. Use `x-show="!lastResolution"` guard on the options section and `x-show="lastResolution"` on the resolution panel. No backend change required — UI lock is sufficient for MVP. Optionally, mark the `EventRef` in inbox as `status: "resolved"` so the lock survives page reload.
 
-### T3.8 — Force budget selection at month start
+### T3.8a — Force budget selection: backend gate
 
-**Owner:** Track C (UI) + Track A (backend gate).
+**Owner:** Track A.
 
 Currently the player can advance days without ever setting a budget. Budget must be mandatory at the start of each month (after payday fires on day 28, before day 1 of the next month can proceed).
 
-**Backend (`events.py`):** In `advance_day`, before ticking the day, check: if `state.month > 1` (or a rollover just happened) and `state.flags.get("budget_set_month") != state.month`, return early with an error log `"budget_required"` and do NOT advance. Set `state.flags["budget_set_month"] = state.month` inside `/api/set-budget` after storing the budget.
+In `advance_day`, before ticking the day, check: if `state.month > 1` (or a rollover just happened) and `state.flags.get("budget_set_month") != state.month`, return early with `reason = "budget_required"` and do NOT advance. Set `state.flags["budget_set_month"] = state.month` inside `/api/set-budget` after storing the budget. `advance_until_event` must also bail on the same condition.
 
-**Frontend (`quid.js`):** If `advance_day` or `advance_until_event` response contains `reason == "budget_required"` (or a log entry with that string), open the budget modal automatically instead of showing a toast. Modal must not be dismissable without submitting.
+### T3.8b — Force budget selection: auto-open modal
+
+**Owner:** Track C. Depends on T3.8a.
+
+When `/api/advance-day` or `/api/advance-until-event` returns `reason == "budget_required"`, open the budget modal automatically instead of showing a toast. Modal must not be dismissable without submitting.
 
 ### T3.9 — Budget actually deducts money and applies stat effects
 
@@ -438,46 +442,70 @@ Home app upcoming events list shows payday with amount 0. Root cause: `CalendarE
 
 Use Option B. No schema change, no backend change.
 
-### T3.11 — Expand test coverage where needed
+### T3.11a — Test coverage: finance.py + events.py
 
-**Owner:** Track A + Track B.
+**Owner:** Track A.
 
-Current test suite (`game/tests.py`) covers practice-skill math (3 tests) and interactive loan inbox (6 tests). Gaps:
+Gaps in `game/tests.py`:
 
 - `finance.py`: `pay_salary` net-of-tax, `charge_rent` insufficient-funds path, `update_credit_score` direction (on-time payment vs miss), `net_worth` calculation.
 - `events.py`: `_rollover_month` re-seeds loan_due + month counter; `advance_until_event` returns `"month_rollover"` reason at boundary.
+
+Add `FinanceTest` and `EventsTest` classes. Each test method covers one named behaviour. Every public function in `finance.py` should have at least one passing + one failure-path test. `manage.py test game.tests` must stay green.
+
+### T3.11b — Test coverage: sage.py
+
+**Owner:** Track B.
+
+Gaps in `game/tests.py`:
+
 - `sage.py`: `validate_event` rejects unknown effect key; `validate_event` rejects delta out of bounds; `_validate_batch` assigns UUID event_id; `resolve_event` raises on already-resolved; `resolve_event` applies correct effects branch (pass vs fail).
 
-Add one test class per module (`FinanceTest`, `EventsTest`, `SageTest`). Each test method covers one named behaviour. Aim: every public function in `finance.py` and `sage.py` has at least one passing + one failure-path test. `manage.py test game.tests` must stay green.
+Add a `SageTest` class. Every public function in `sage.py` should have at least one passing + one failure-path test. `manage.py test game.tests` must stay green.
 
-### T3.12 — Apply for credit card
+### T3.12a — Apply for credit card: backend + endpoint
 
-**Owner:** Track A (endpoint + finance) + Track C (UI button).
+**Owner:** Track A.
 
-Bank app's products panel currently shows `cc_starter` / `cc_better` as "locked_visible" or "active" but clicking does nothing. Finance engine already has `available_products(state)` and a `CreditCard` dataclass; what's missing is the acquisition path.
+Finance engine already has `available_products(state)` and a `CreditCard` dataclass; what's missing is the acquisition path.
 
-- **Backend:** new `finance.apply_for_credit_card(state, tier)` (tier = `"starter" | "better"`) — validates unlock via `available_products`, reads limit/APR from `balance.CC_STARTER_*` / `CC_BETTER_*`, assigns `due_day = CC_DUE_DAY`, `min_payment_pct = CC_MIN_PAYMENT_PCT`, and seeds the `cc_due` calendar event for the current month (T2.2 already seeds it on new-game *if* `has_cc` — reuse `seed_month_calendar`'s branch or append one directly). Raise `ValueError` if the player already has a CC.
-- **Endpoint:** `POST /api/apply-cc` with `{state, tier}` → returns `{state, message}`.
-- **UI:** in `quid.js`, `applyForCreditCard(tier)` calls the endpoint, surfaces `message` as a toast. In `index.html` the products-panel tiles for `cc_starter` / `cc_better` become clickable when `productStatus(key) === 'active'`.
+New `finance.apply_for_credit_card(state, tier)` (tier = `"starter" | "better"`) — validates unlock via `available_products`, reads limit/APR from `balance.CC_STARTER_*` / `CC_BETTER_*`, assigns `due_day = CC_DUE_DAY`, `min_payment_pct = CC_MIN_PAYMENT_PCT`, and seeds the `cc_due` calendar event for the current month (T2.2 already seeds it on new-game *if* `has_cc` — reuse `seed_month_calendar`'s branch or append one directly). Raise `ValueError` if the player already has a CC.
 
-### T3.13 — Transfer between checking and savings
+Endpoint: `POST /api/apply-cc` with `{state, tier}` → returns `{state, message}`.
 
-**Owner:** Track A (endpoint) + Track C (UI modal).
+### T3.12b — Apply for credit card: UI
 
-The Bank app's "Transfer" button is a stub toast. Implement a simple bidirectional transfer.
+**Owner:** Track C. Depends on T3.12a.
 
-- **Backend:** new `finance.transfer(state, direction, amount)` where `direction = "to_savings" | "to_checking"`. Validates amount > 0 and source has the funds (else `ValueError`). Moves integer grosze between `state.accounts.checking` and `state.accounts.savings`.
-- **Endpoint:** `POST /api/transfer` with `{state, direction, amount}` → `{state, message}`.
-- **UI:** replace the stub `@click="showToast('Transfer UI — Phase 2.')"` with a modal mirroring the budget-modal pattern: direction radio + PLN amount input (converted to grosze). Submit posts + replaces state.
+Products-panel tiles for `cc_starter` / `cc_better` become clickable when `productStatus(key) === 'active'`. On click, `applyForCreditCard(tier)` in `quid.js` POSTs `/api/apply-cc`, replaces state, and surfaces the returned `message` as a toast. Confirm dialog before committing.
 
-### T3.14 — Take personal loan
+### T3.13a — Transfer checking ↔ savings: backend + endpoint
 
-**Owner:** Track A (endpoint) + Track C (UI).
+**Owner:** Track A.
+
+New `finance.transfer(state, direction, amount)` where `direction = "to_savings" | "to_checking"`. Validates `amount > 0` and source has the funds (else `ValueError`). Moves integer grosze between `state.accounts.checking` and `state.accounts.savings`.
+
+Endpoint: `POST /api/transfer` with `{state, direction, amount}` → `{state, message}`.
+
+### T3.13b — Transfer checking ↔ savings: UI
+
+**Owner:** Track C. Depends on T3.13a.
+
+Replace the stub `@click="showToast('Transfer UI — Phase 2.')"` with a modal mirroring the budget-modal pattern: direction radio + PLN amount input (converted to grosze). Submit POSTs `/api/transfer` and replaces state.
+
+### T3.14a — Take personal loan: endpoint
+
+**Owner:** Track A.
 
 `finance.take_loan("personal", amount)` already works — it seeds the `loan_due` calendar entry and credits checking. What's missing is the player-initiated endpoint.
 
-- **Endpoint:** `POST /api/take-loan` with `{state, kind, amount}` where `kind ∈ {"personal", "bnpl"}`. For MVP: validate against `available_products` (personal loan requires credit score 650; bnpl always available), cap `amount` at a sane per-loan ceiling (add `MAX_PERSONAL_LOAN` / `MAX_BNPL` to `balance.py`), return `{state, message}`.
-- **UI:** products panel `personal_loan` tile opens an amount modal when active; `bnpl` tile is always live. Keep it terse — one modal reused via a `loanKind` slot on the Alpine component.
+`POST /api/take-loan` with `{state, kind, amount}` where `kind ∈ {"personal", "bnpl"}`. Validate against `available_products` (personal loan requires credit score 650; bnpl always available), cap `amount` at a sane per-loan ceiling (add `MAX_PERSONAL_LOAN` / `MAX_BNPL` to `balance.py`), return `{state, message}`.
+
+### T3.14b — Take personal loan: UI
+
+**Owner:** Track C. Depends on T3.14a.
+
+Products panel `personal_loan` tile opens an amount modal when active; `bnpl` tile is always live. Keep it terse — one modal reused via a `loanKind` slot on the Alpine component. Submit POSTs `/api/take-loan`.
 
 ### T3.15 — Ollama HTTP client (B2)
 
@@ -505,9 +533,9 @@ The Bank app's "Transfer" button is a stub toast. Implement a simple bidirection
 - **Dev C** — Track C (UI). Starts with fake state, most visual progress early, best candidate to demo.
 
 During integration everyone works together. Phase 3 split (no shared tasks):
-- **Track A:** T3.3 Demo script, T3.5 Bug bash, T3.8 Force budget (backend gate), T3.9 Budget deducts money, T3.11 Test coverage, T3.12 Apply for CC (backend), T3.13 Transfer (backend), T3.14 Take personal loan (backend).
-- **Track B:** T3.1 Ollama boot check, T3.6 Drop slug / server-side event_id, T3.11 Test coverage (sage.py portion), T3.15 Ollama HTTP client (B2).
-- **Track C:** T2.1 Set Budget modal, T2.4 Unlock-tier UI gating, T3.2 Save/export/import, T3.4 Cyberpunk theme, T3.7 **[URGENT]** Lock resolved events, T3.8 Force budget (modal wire), T3.10 Payday amount display, T3.12/T3.13/T3.14 Bank UI buttons + modals.
+- **Track A:** T3.3 Demo script, T3.5 Bug bash, T3.8a Budget gate (backend), T3.9 Budget deducts money, T3.11a Tests (finance + events), T3.12a Apply-CC backend, T3.13a Transfer backend, T3.14a Take-loan endpoint.
+- **Track B:** T3.1 Ollama boot check, T3.6 Drop slug / server-side event_id, T3.11b Tests (sage.py), T3.15 Ollama HTTP client (B2).
+- **Track C:** T2.1 Set Budget modal, T2.4 Unlock-tier UI gating, T3.2 Save/export/import, T3.4 Cyberpunk theme, T3.7 **[URGENT]** Lock resolved events, T3.8b Auto-open budget modal, T3.10 Payday amount display, T3.12b Apply-CC UI, T3.13b Transfer modal, T3.14b Loan modal.
 
 -----
 
