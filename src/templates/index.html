@@ -163,7 +163,7 @@
                 </template>
 
                 <div class="row mt-2 g-6" style="gap:6px">
-                  <button class="btn-q muted" style="flex:1" @click="showToast('Transfer UI — Phase 2.')">Transfer</button>
+                  <button class="btn-q muted" style="flex:1" @click="openTransferModal()">Transfer</button>
                   <button class="btn-q muted" style="flex:1" @click="openBudgetModal()">Set budget</button>
                 </div>
               </div>
@@ -481,6 +481,52 @@
 
                 <button class="btn-q mag" :disabled="budgetSaving" @click="saveBudget()">
                   <span x-text="budgetSaving ? 'Saving…' : 'Save budget'"></span>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- ===== transfer modal ===== -->
+          <template x-if="transferModalOpen">
+            <div class="modal-overlay" @click.self="closeTransferModal()">
+              <div class="modal-panel col g-8">
+                <div class="row">
+                  <span class="sub-h">Transfer</span>
+                  <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          @click="closeTransferModal()">Close</button>
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim">Direction</span>
+                  <button type="button" class="transfer-toggle" @click="flipTransferDirection()">
+                    <span class="tt-side"
+                          :class="transferDraft.direction === 'to_savings' ? 'tt-active' : 'tt-muted'">
+                      <span class="text-[10px] dim" x-text="transferDraft.direction === 'to_savings' ? 'From' : 'To'"></span>
+                      <span class="text-sm">Checking</span>
+                    </span>
+                    <span class="tt-arrow-wrap">
+                      <img src="{% static 'img/icon_arrow_right.png' %}" alt="→"
+                           class="tt-arrow"
+                           :class="transferDraft.direction === 'to_checking' ? 'tt-flip' : ''" />
+                    </span>
+                    <span class="tt-side"
+                          :class="transferDraft.direction === 'to_checking' ? 'tt-active' : 'tt-muted'">
+                      <span class="text-[10px] dim" x-text="transferDraft.direction === 'to_checking' ? 'From' : 'To'"></span>
+                      <span class="text-sm">Savings</span>
+                    </span>
+                  </button>
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim">Amount (PLN)</span>
+                  <input type="number" min="0" step="0.01" class="budget-input"
+                         x-model.number="transferDraft.amount_pln" />
+                  <span class="text-xs dim"
+                        x-text="'Available: ' + money(transferDraft.direction === 'to_savings' ? checking : savings)"></span>
+                </div>
+
+                <button class="btn-q mag" :disabled="transferSaving" @click="saveTransfer()">
+                  <span x-text="transferSaving ? 'Transferring…' : 'Transfer'"></span>
                 </button>
               </div>
             </div>

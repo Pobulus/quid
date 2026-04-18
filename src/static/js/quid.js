@@ -136,6 +136,9 @@ function quid() {
     openEventId: null,
     lastResolution: null,     // { option_id, rolled, dc, passed, effects }
     rollingEventId: null,     // while animating
+    transferModalOpen: false,
+    transferDraft: { direction: "to_savings", amount_pln: 0 },
+    transferSaving: false,
     budgetModalOpen: false,
     budgetModalRequired: false,   // true when server gated on budget_required — modal can't be dismissed
     budgetDraft: { food_tier: FOOD_DEFAULT_TIER, leisure: 0, bills_buffer: 0 },
@@ -630,6 +633,54 @@ function quid() {
         this.budgetModalOpen = false;
         this.budgetModalRequired = false;
         this.showToast(data.message || "Budget saved.");
+      }
+    },
+
+    // ---- transfer modal ----
+
+    openTransferModal() {
+      this.transferDraft = { direction: "to_savings", amount_pln: 0 };
+      this.transferModalOpen = true;
+    },
+
+    flipTransferDirection() {
+      this.transferDraft.direction =
+        this.transferDraft.direction === "to_savings" ? "to_checking" : "to_savings";
+    },
+
+    closeTransferModal() {
+      if (this.transferSaving) return;
+      this.transferModalOpen = false;
+    },
+
+    async saveTransfer() {
+      if (this.transferSaving) return;
+      const pln = Number(this.transferDraft.amount_pln) || 0;
+      const amount = Math.round(pln * 100);
+      if (amount <= 0) { this.showToast("Enter a positive amount."); return; }
+      this.transferSaving = true;
+      try {
+        const r = await fetch("/api/transfer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            state: this.state,
+            direction: this.transferDraft.direction,
+            amount,
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.showToast(data.detail || `Error ${r.status} from /api/transfer.`);
+          return;
+        }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.transferModalOpen = false;
+        this.showToast(data.message || "Transfer complete.");
+      } catch (_) {
+        this.showToast("Network error.");
+      } finally {
+        this.transferSaving = false;
       }
     },
 
