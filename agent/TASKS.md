@@ -63,9 +63,9 @@ Everyone needs to agree on this shape before splitting off. Dataclass names, fie
 GameState:
   schema_version: int               # 1
   seed: int                         # for client-side d20 rolls
-  day: int                          # 1..30, resets each month
+  day: int                          # 1..28, resets each month (months are 28 days, day 1 = Monday)
   month: int                        # 1..N, starts at 1
-  day_of_week: int                  # 0=Mon .. 6=Sun
+  day_of_week: int                  # 0=Mon .. 6=Sun; each month begins on Monday
   actions_today: int                # 0 or 1
 
   player: Player
@@ -327,13 +327,23 @@ All 3 devs together. This is where tracks collide.
 
 Replace fake state with real `/api/new-game`, advance-day, set-budget, practice-skill, rest, sage/event, event/resolve. Every state-returning endpoint → update localStorage + re-render.
 
+**Set Budget modal (Track C):** the current button is a stub (`templates/index.html:151`). Build a simple modal with a 3-tier food selector (cheap / normal / premium) and POST `{state, budget: {food_tier}}` to `/api/set-budget`. Display the monthly cost + per-tier stat deltas from a small `FOOD_TIERS` mirror in `quid.js` (keep in sync with `balance.FOOD_TIERS`). Other budget lines (leisure, bills_buffer) are cosmetic — pure int inputs, stored in flags, no gameplay effect.
+
 ### T2.2 — Seed calendar on new-game
 
-Payday on day 1, rent on day 5, heating on day 10 (winter only), CC due if CC exists. Heating scales: months 1, 11, 12 = 3×; months 2, 10 = 2×; months 5–9 = 0.5×.
+Payday on day 28, rent on day 5, heating on day 10, CC due if CC exists. Heating scales: months 1, 11, 12 = 3×; months 2, 10 = 2×; months 5–9 = 0.5×. Rollover re-seeds the next month's calendar with the same pattern.
+
+**Status:** done in Track A — `state.seed_month_calendar` + `events._rollover_month`.
 
 ### T2.3 — Event loop end-to-end
 
-Click “advance until event” → server loops day ticks → probability check → if fires, SAGE endpoint → event lands in inbox → Email app shows unread → player opens, picks option → roll → resolve → state updates. Full loop green.
+Click "advance until event" → server loops day ticks → probability check → if fires, SAGE endpoint → event lands in inbox → Email app shows unread → player opens, picks option → roll → resolve → state updates. Full loop green.
+
+**Integration note (A+B):** Track A's `/api/advance-until-event` currently returns `{state, logs, reason}` and stops on any calendar event or month boundary. Track C already checks `data.event` for a toast. Phase-2 plan: when `reason == "max_days"` (no calendar event fired and stress roll succeeds), the endpoint internally calls Track B's SAGE logic, appends the event to `state.inbox`, and includes `event` in its response. Alternative: Track C makes a follow-up call to `/api/sage/event` after advance-until-event returns — simpler but chattier. Pick one during integration.
+
+### T2.6 — Inbox entries for non-auto calendar events
+
+**Owner:** Track A. Calendar events with `auto_resolve: false` (e.g. `loan_due` when the player can't cover it, see fixture `static/fake_state.json`) currently sit in the calendar and never surface. On day tick, if a non-auto event matches today, generate a synthetic inbox entry (`event_id = f"cal_{kind}_{month}_{day}"`, status unread, body + options built from a small template) and leave the calendar entry for next-day retry until resolved. Needed so players can act on loan-due warnings from the Email app instead of them being silent.
 
 ### T2.4 — Unlock tiers gate the UI
 

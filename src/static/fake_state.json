@@ -113,6 +113,11 @@
     { "slug": "bnpl_pitch", "days_ago": 3 },
     { "slug": "grocery_sale", "days_ago": 6 }
   ],
-  "flags": { "tutorial_seen": true, "took_bnpl_this_month": true },
+  "flags": {
+    "tutorial_seen": true,
+    "took_bnpl_this_month": true,
+    "budget": { "food_tier": "normal" },
+    "food_daily_hunger": 4
+  },
   "game_over": null
 }
