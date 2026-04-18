@@ -12,7 +12,8 @@
       "Bash(curl -s http://localhost:8765/ -o /dev/null -w \"%{http_code}\\\\n\")",
       "Bash(curl -s http://localhost:8765/static/js/quid.js -o /dev/null -w \"%{http_code}\\\\n\")",
       "Bash(curl -s http://localhost:8765/static/css/quid.css -o /dev/null -w \"%{http_code}\\\\n\")",
-      "Bash(../.venv/bin/python *)"
+      "Bash(../.venv/bin/python *)",
+      "Bash(python manage.py test game.tests)"
     ]
   },
   "prefersReducedMotion": true
