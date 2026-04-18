@@ -176,11 +176,34 @@ class GameState:
 # ---- Factory --------------------------------------------------------------------
 
 
+def seed_month_calendar(month: int, rent: int, has_cc: bool) -> list[CalendarEvent]:
+    """Seed the standard recurring events for a given month."""
+    heating_mult = B.HEATING_MONTH_MULTIPLIER.get(month, 1.0)
+    events = [
+        CalendarEvent(day=B.PAYDAY_DAY, month=month, kind="payday", amount=0, auto_resolve=True),
+        CalendarEvent(day=B.RENT_DUE_DAY, month=month, kind="rent_due", amount=rent, auto_resolve=True),
+        CalendarEvent(
+            day=B.HEATING_DUE_DAY,
+            month=month,
+            kind="heating_bill",
+            amount=int(B.HEATING_BASE * heating_mult),
+            auto_resolve=True,
+        ),
+    ]
+    if has_cc:
+        events.append(
+            CalendarEvent(day=B.CC_DUE_DAY, month=month, kind="cc_due", amount=0, auto_resolve=True)
+        )
+    return events
+
+
 def new_game(seed: Optional[int] = None) -> GameState:
     if seed is None:
         seed = random.randint(1, 2**31 - 1)
 
     house_cfg = B.HOUSE_TIERS["shoddy_rental"]
+    rent = house_cfg["rent"]
+    starter_drip = B.FOOD_TIERS[B.FOOD_DEFAULT_TIER]["daily_hunger"]
     return GameState(
         schema_version=B.SCHEMA_VERSION,
         seed=seed,
@@ -206,6 +229,11 @@ def new_game(seed: Optional[int] = None) -> GameState:
             shoddiness=house_cfg["shoddiness"],
             durability=house_cfg["durability"],
             distance_to_work_km=house_cfg["distance_to_work_km"],
-            monthly_rent=house_cfg["rent"],
+            monthly_rent=rent,
         ),
+        calendar=seed_month_calendar(1, rent, has_cc=False),
+        flags={
+            "budget": {"food_tier": B.FOOD_DEFAULT_TIER},
+            "food_daily_hunger": starter_drip,
+        },
     )
