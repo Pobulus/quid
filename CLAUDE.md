@@ -10,9 +10,19 @@ The authoritative planning docs are:
 
 - `docs/Hackathon_project.md` — feature spec, UI vision, SAGE LLM contract.
 - `agent/TASKS.md` — build plan: phases, tracks, dev assignments, conventions, risk log. **Read this before making non-trivial changes.** Later decisions in that doc override earlier ones.
-- `agent/PROGRESS.md` — running log of what's done (currently empty).
+- `agent/PROGRESS.md` — running log of what's done. **Append a line whenever you finish a task from `TASKS.md`** (see "Logging progress" below).
 
 `src/` is empty — nothing has been implemented yet. Phase 0 in `TASKS.md` must land before parallel work starts.
+
+## Logging progress
+
+After completing any task from `TASKS.md`, append a one-line entry to `agent/PROGRESS.md`. Format:
+
+```
+- YYYY-MM-DD · T<id> <short summary>[ — [report](reports/<slug>.md)]
+```
+
+The report link is **optional** — only attach one if the task warranted a write-up (non-trivial decision, gotcha worth remembering, benchmark numbers, etc.). Routine tasks get a one-liner with no link. Reports live in `agent/reports/` and use kebab-case filenames matching the task id (e.g. `t0.1-scaffold.md`). Keep the index lean: one line per task, newest at the bottom.
 
 ## Stack & topology
 
