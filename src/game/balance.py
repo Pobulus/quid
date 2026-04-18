@@ -139,8 +139,10 @@ CC_MIN_PAYMENT_PCT = 0.05
 CC_DUE_DAY = 25
 
 PERSONAL_LOAN_APR = 0.14
+MAX_PERSONAL_LOAN = 2000000    # 20000 PLN
 BNPL_GRACE_DAYS = 30
 BNPL_POST_GRACE_APR = 0.40
+MAX_BNPL = 300000              # 3000 PLN
 PAYDAY_LOAN_APR = 1.20         # brutal on purpose
 
 # Credit score recompute weights (must sum to 1.0).

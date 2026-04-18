@@ -3,6 +3,7 @@ import random
 from ninja import Body, NinjaAPI
 from ninja.errors import HttpError
 
+from game import balance as B
 from game import sage, events, finance
 from game.state import GameState, new_game
 
@@ -66,6 +67,36 @@ def practice_skill(request, payload: dict = Body(...)):
 def rest(request, payload: dict = Body(...)):
     state = _load(payload)
     state, msg = events.rest(state)
+    return _out(state, message=msg)
+
+
+@api.post("/take-loan")
+def take_loan(request, payload: dict = Body(...)):
+    state = _load(payload)
+    kind = payload.get("kind")
+    try:
+        amount = int(payload.get("amount", 0))
+    except (TypeError, ValueError):
+        raise HttpError(400, "amount must be an integer (grosze)")
+    if amount <= 0:
+        raise HttpError(400, "amount must be positive")
+
+    products = finance.available_products(state)
+    if kind == "personal":
+        if "personal_loan" not in products:
+            raise HttpError(400, "Personal loan unavailable (credit score too low)")
+        cap = B.MAX_PERSONAL_LOAN
+    elif kind == "bnpl":
+        cap = B.MAX_BNPL
+    else:
+        raise HttpError(400, f"unknown loan kind: {kind}")
+    if amount > cap:
+        raise HttpError(400, f"amount exceeds cap ({cap/100:.0f} PLN)")
+
+    if kind == "personal":
+        state, msg = finance.take_loan(state, "personal", amount)
+    else:
+        state, msg = finance.take_bnpl(state, amount)
     return _out(state, message=msg)
 
 
