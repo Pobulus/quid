@@ -31,6 +31,10 @@ from game.events_fallback import FALLBACK_EVENTS
 from game.state import EventRef, GameState, RecentEvent
 
 
+# Flipped to False by apps.GameConfig.ready() when OLLAMA_HOST is unreachable.
+OLLAMA_AVAILABLE = True
+
+
 # ---- Probability gate -----------------------------------------------------------
 
 
@@ -175,7 +179,8 @@ def resolve_event(
 
     ref.status = "resolved"
 
-    state.recent_events.append(RecentEvent(slug=ref.event["slug"], days_ago=0))
+    dedup_key = "_".join(ref.event.get("title", ref.event_id).lower().split()[:5])
+    state.recent_events.append(RecentEvent(slug=dedup_key, days_ago=0))
     state.recent_events = state.recent_events[-8:]
 
     return {
@@ -198,8 +203,9 @@ financial-literacy RPG set in modern-day Poland. Currency is PLN. Tone:
 realistic, dry, lightly cynical, educational. No fantasy, no metaphors, no
 moralising. Mundane events with real financial weight.
 
-Your job: produce ONE inbox event for the player as a single JSON object.
-No prose, no markdown fences, no commentary. JSON only.
+Your job: produce a JSON array of exactly 10 distinct inbox events for the
+player. No prose, no markdown fences, no commentary. JSON array only.
+ALL THE RESPONSES SHOULD BE IN ENGLISH.
 
 EFFECT KEYS (closed set — no others allowed):
   health, hunger, sanity, energy, money, credit_score,
@@ -227,40 +233,41 @@ same object (no implicit roll).
 
 EVENT SHAPE:
   {
-    "slug": "<snake_case, 1-40 chars, NEW — not in recent_events>",
     "title": "<inbox subject line, ~6 words>",
     "sender": "<who the message is from>",
     "body": "<short markdown body — paragraphs, **bold**, *italic*. No HTML.>",
     "options": [<2..4 options>]
   }
 
-EXAMPLE (study the shape, do not copy verbatim):
-{
-  "slug": "boiler_emergency",
-  "title": "The boiler is making a noise again",
-  "sender": "Landlord",
-  "body": "Woke up to a grinding noise. Your landlord says it's *\\"basically working\\"*.",
-  "options": [
-    {"id": "a", "label": "Fix it yourself",
-     "skill_check": {"skill": "handiwork", "difficulty_class": 12},
-     "effects_on_success": {"handiwork": 1, "sanity": -5},
-     "effects_on_failure": {"money": -25000, "sanity": -10}
-     },
-    {"id": "b", "label": "Pay a plumber",
-     "skill_check": null,
-     "effects_on_success": {"money": -30000, "sanity": -2},
-     "effects_on_failure": {"money": -30000, "sanity": -2}
-     }
-  ]
-}
+EXAMPLE OUTPUT (study the shape, do not copy verbatim):
+[
+  {
+    "title": "The boiler is making a noise again",
+    "sender": "Landlord",
+    "body": "Woke up to a grinding noise. Your landlord says it's *\\"basically working\\"*.",
+    "options": [
+      {"id": "a", "label": "Fix it yourself",
+       "skill_check": {"skill": "handiwork", "difficulty_class": 12},
+       "effects_on_success": {"handiwork": 1, "sanity": -5},
+       "effects_on_failure": {"money": -25000, "sanity": -10}
+      },
+      {"id": "b", "label": "Pay a plumber",
+       "skill_check": null,
+       "effects_on_success": {"money": -30000, "sanity": -2},
+       "effects_on_failure": {"money": -30000, "sanity": -2}
+      }
+    ]
+  },
+  ... 9 more distinct events ...
+]
 
 Hard rules:
-  * Output ONE JSON object. No surrounding text. No code fences.
-  * `slug` must NOT appear in the recent_events list provided below.
+  * Output a JSON array of exactly 10 objects. No surrounding text. No code fences.
+  * All 10 events must be distinct — different situations, senders, and stakes.
   * Every effect key must be in the closed set above.
   * Every effect delta must be within the bounds above.
   * Money in grosze (integer). 1 PLN = 100 grosze.
-  * The event must be plausibly tied to the player's current situation.
+  * Each event must be plausibly tied to the player's current situation.
 """
 
 
@@ -293,10 +300,10 @@ def build_prompt(state: GameState) -> tuple[str, str]:
     slice as JSON."""
     ctx = _state_slice(state)
     user = (
-        "Generate the next event for this player.\n\n"
+        "Generate the next batch of 10 events for this player.\n\n"
         "PLAYER CONTEXT (JSON):\n"
         f"{json.dumps(ctx, ensure_ascii=False, indent=2)}\n\n"
-        "Return one JSON event matching the schema. JSON only."
+        "Return a JSON array of exactly 10 events matching the schema. JSON only."
     )
     return _SYSTEM_PROMPT, user
 
@@ -345,7 +352,6 @@ class _Option(BaseModel):
 
 
 class _Event(BaseModel):
-    slug: str = Field(min_length=1, max_length=40, pattern=r"^[a-z][a-z0-9_]*$")
     title: str = Field(min_length=1, max_length=120)
     sender: str = Field(min_length=1, max_length=60)
     body: str = Field(min_length=1)
@@ -359,19 +365,14 @@ class _Event(BaseModel):
         return self
 
 
-def validate_event(payload: Any, recent_slugs: Optional[set[str]] = None) -> dict:
+def validate_event(payload: Any) -> dict:
     """Validate one LLM-produced event payload.
 
-    Raises pydantic.ValidationError on shape/bounds problems. Raises ValueError
-    if the slug repeats one in `recent_slugs` (the prompt forbids this — repeats
-    are a signal the model ignored context).
-
-    Returns the validated payload as a plain dict (suitable for storing in the
-    inbox). Does NOT add `event_id` — caller owns that.
+    Raises pydantic.ValidationError on shape/bounds problems.
+    Returns the validated payload as a plain dict. Does NOT add `event_id` or
+    `slug` — caller owns those.
     """
     event = _Event.model_validate(payload)
-    if recent_slugs and event.slug in recent_slugs:
-        raise ValueError(f"slug {event.slug!r} repeats a recent event")
     return event.model_dump()
 
 
@@ -393,40 +394,66 @@ def _coerce_to_dict(raw: Any) -> dict:
     raise ValueError(f"call_fn returned unsupported type: {type(raw).__name__}")
 
 
+def _validate_batch(raw: Any) -> list[dict]:
+    """Parse and validate a JSON array of events. Returns list of valid dicts."""
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+    if not isinstance(raw, list):
+        raise ValueError(f"expected JSON array, got {type(raw).__name__}")
+    validated = []
+    for i, item in enumerate(raw):
+        try:
+            ev = validate_event(item)
+            ev["event_id"] = uuid.uuid4().hex
+            validated.append(ev)
+        except (ValidationError, ValueError) as e:
+            raise ValueError(f"event[{i}] invalid: {e}") from e
+    return validated
+
+
 def generate_event_via_llm(
     state: GameState,
     call_fn: CallFn,
     rng: Optional[random.Random] = None,
 ) -> tuple[dict, str]:
-    """Full pipeline: build → call → validate → one retry → fallback.
+    """Full pipeline: pop from queue → (if empty) build → call → validate batch
+    → cache remainder → return first.
 
-    Returns (event_dict, source) where source is "llm" | "llm_retry" | "fallback".
+    Returns (event_dict, source) where source is
+    "llm_queue" | "llm" | "llm_retry" | "fallback".
     `call_fn` is injected (B2 hasn't landed). On any unrecoverable failure,
     returns a mock event from `FALLBACK_EVENTS` so the demo never stalls.
-
-    Caller assigns `event_id` and pushes to inbox.
     """
+    if not OLLAMA_AVAILABLE:
+        return generate_event(state, rng=rng), "fallback"
+
+    # Drain pre-fetched queue first
+    queue: list[dict] = state.flags.get("event_queue", [])
+    if queue:
+        event = queue.pop(0)
+        state.flags["event_queue"] = queue
+        return event, "llm_queue"
+
     system, user = build_prompt(state)
-    recent_slugs = {r.slug for r in state.recent_events}
 
     last_error: Optional[str] = None
     for attempt in range(2):  # initial + one retry
         retry_suffix = (
             f"\n\nYour previous response was invalid:\n{last_error}\n"
-            "Return corrected JSON only — no prose."
+            "Return corrected JSON array of 10 events — no prose."
             if last_error
             else ""
         )
         try:
             raw = call_fn(system, user + retry_suffix)
-            payload = _coerce_to_dict(raw)
-            event = validate_event(payload, recent_slugs=recent_slugs)
-            event["event_id"] = uuid.uuid4().hex
-            return event, ("llm" if attempt == 0 else "llm_retry")
+            batch = _validate_batch(raw)
+            if not batch:
+                raise ValueError("empty batch returned")
+            state.flags["event_queue"] = batch[1:]  # cache remaining 9
+            return batch[0], ("llm" if attempt == 0 else "llm_retry")
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             last_error = str(e)
         except Exception as e:
-            # Transport / unknown — bail straight to fallback.
             last_error = f"transport: {e}"
             break
 
