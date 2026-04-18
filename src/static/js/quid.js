@@ -173,6 +173,21 @@ function quid() {
       this.save();
     },
 
+    async newDemoGame() {
+      const r = await fetch("/api/new-game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ demo: true }),
+      });
+      const data = await r.json();
+      this.state = data.state;
+      this.openEventId = null;
+      this.lastResolution = null;
+      this.activeApp = "home";
+      this.save();
+      this.showToast("Demo run loaded. Check the Email app.");
+    },
+
     async loadFakeState() {
       const r = await fetch("/static/fake_state.json");
       if (!r.ok) { this.showToast("fake_state.json not found"); return; }
