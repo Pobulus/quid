@@ -5,6 +5,13 @@ One line per completed task from `TASKS.md`. Append at the bottom. Optional `[re
 - 2026-04-18 · T0.1 Django scaffold: `finrpg` project + `game` app, django-ninja, Tailwind/DaisyUI/HTMX/Alpine via CDN, phone-mockup shell, `.env` wired.
 - 2026-04-18 · T0.2 GameState dataclasses with to_dict/from_dict + schema_version; `balance.py` with starting state, APR bands, heating multipliers, `EFFECT_KEYS`, `EFFECT_DELTA_BOUNDS`, `UNLOCK_TIERS`.
 - 2026-04-18 · T0.3 `POST /api/new-game` and `POST /api/echo` round-trip; frontend boots from localStorage or fetches new game; verified via curl.
+- 2026-04-18 · C1 Phone shell refactor: split `static/css/quid.css` + `static/js/quid.js`; Alpine `activeApp` store; 4-app dock with active highlight + unread badge; status bar + toast + dev bar.
+- 2026-04-18 · C2 Bank app: credit score gauge (conic-gradient), accounts + savings goal bar, credit card card, loans list, products panel with locked-visible tiles reading `UNLOCK_TIERS` (client mirror of `balance.py`) and showing requirement strings.
+- 2026-04-18 · C3 Home app: house card (tier/rent/flavor/shoddiness/durability), advance-day + advance-until-event buttons wired to endpoints with graceful 404 toast, 10-day upcoming calendar.
+- 2026-04-18 · C4 Health app: stat bars (colored by tier), skill rows with level + practice counter + per-skill Practice button (gated by `actions_today`), Rest action.
+- 2026-04-18 · C5 Email app: inbox list + detail view, `tinyMarkdown` body renderer, option cards with skill/DC + client-side success probability, deterministic d20 via LCG on `state.seed`, POST to `/api/event/resolve` with local-fallback resolution display when endpoint not yet wired.
+- 2026-04-18 · C6 Game-over modal: overlay shows when `state.game_over != null`, cause + flavor + new-game button wiping localStorage.
+- 2026-04-18 · Fake-state fixture `src/static/fake_state.json` (CC + bnpl loan + calendar + boiler-emergency event); dev bar exposes "load fake" / "new game" / "export"; fixture round-trips cleanly through `/api/echo`.
 - 2026-04-18 · Spec: months are 28 days, day 1 = Monday (updated `agent/TASKS.md`). Payday moved to day 28 so it pays for work already completed.
 - 2026-04-18 · T1.A1 `finance.py` pure functions: pay_salary, charge_rent/heating, apply_monthly_interest, CC bill, loan payments, take_loan/bnpl, update_credit_score, net_worth, available_products.
 - 2026-04-18 · T1.A2 `events.py` day-tick engine + calendar firing + month rollover; endpoints `/api/advance-day`, `/api/advance-until-event`, `/api/set-budget` (flags-only), `/api/practice-skill`, `/api/rest`. New-game seeds month-1 calendar (payday d28, rent d5, heating d10). Weekday tick increments `workdays_this_month`.

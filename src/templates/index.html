@@ -1,4 +1,4 @@
-<!doctype html>
+{% load static %}<!doctype html>
 <html lang="en" data-theme="quid">
 <head>
   <meta charset="utf-8" />
@@ -8,114 +8,431 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <!-- quid.js must be deferred BEFORE Alpine so its alpine:init listener fires in time -->
+  <script defer src="{% static 'js/quid.js' %}"></script>
   <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
 
-  <style>
-    :root { --neon: #00ffc3; --magenta: #ff0080; --gold: #ffcc00; --base: #0a0a14; }
-    body { background: var(--base); color: #d6d6e0; font-family: 'VT323', monospace; min-height: 100vh; }
-    .pixel { font-family: 'Press Start 2P', system-ui, monospace; letter-spacing: 0.5px; }
-    .phone {
-      width: 360px; height: 720px; border-radius: 36px; padding: 14px;
-      background: #15151f; box-shadow: 0 0 0 2px #2a2a3a, 0 30px 80px rgba(0,255,195,0.08);
-      position: relative;
-    }
-    .phone::before {
-      content: ""; position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-      width: 110px; height: 18px; border-radius: 0 0 12px 12px; background: #0a0a14;
-    }
-    .screen {
-      width: 100%; height: 100%; border-radius: 24px; background: #0d0d18;
-      display: flex; flex-direction: column; overflow: hidden; position: relative;
-    }
-    .dock { background: rgba(255,255,255,0.04); border-top: 1px solid rgba(0,255,195,0.15); }
-    .dock-btn { color: #6f6f85; transition: color 0.15s; }
-    .dock-btn.active { color: var(--neon); text-shadow: 0 0 8px var(--neon); }
-    .neon { color: var(--neon); }
-    .magenta { color: var(--magenta); }
-    .gold { color: var(--gold); }
-  </style>
+  <link rel="stylesheet" href="{% static 'css/quid.css' %}" />
 </head>
-<body class="flex items-center justify-center p-6">
 
-  <div x-data="quid()" x-init="boot()" class="phone">
+<body class="flex items-center justify-center p-6" x-data="quid" x-init="boot()">
+
+  <div class="phone">
     <div class="screen">
-      <header class="px-4 py-3 flex items-center justify-between border-b border-white/5">
-        <span class="pixel text-xs neon">QUID</span>
-        <span class="text-sm" x-text="state ? `M${state.month} D${state.day}` : 'booting…'"></span>
-        <span class="text-sm gold" x-text="state ? money(state.accounts.checking) : '—'"></span>
-      </header>
 
-      <main class="flex-1 p-4 overflow-y-auto">
-        <template x-if="!state">
-          <p class="text-center opacity-60">Loading…</p>
-        </template>
+      <!-- ===== loading ===== -->
+      <template x-if="!state">
+        <div class="flex-1 flex items-center justify-center">
+          <span class="pixel text-xs neon">BOOTING…</span>
+        </div>
+      </template>
 
-        <template x-if="state">
-          <div class="space-y-3">
-            <h1 class="pixel text-sm magenta">Hello, fresh grad.</h1>
-            <p class="text-lg leading-snug">
-              Day <span class="neon" x-text="state.day"></span>,
-              month <span class="neon" x-text="state.month"></span>.
-              You have <span class="gold" x-text="money(state.accounts.checking)"></span> in checking.
-            </p>
-            <p class="opacity-70 text-sm">
-              Stats — H:<span x-text="state.player.stats.health"></span>
-              Hu:<span x-text="state.player.stats.hunger"></span>
-              S:<span x-text="state.player.stats.sanity"></span>
-              E:<span x-text="state.player.stats.energy"></span>
-            </p>
-            <p class="opacity-50 text-xs">Schema v<span x-text="state.schema_version"></span> · seed <span x-text="state.seed"></span></p>
+      <template x-if="state">
+        <div class="contents">
 
-            <button class="btn btn-sm btn-outline border-white/10 mt-4" @click="newGame()">New game</button>
-          </div>
-        </template>
-      </main>
+          <!-- ===== status bar ===== -->
+          <header class="status-bar">
+            <span class="pixel text-[10px] neon">QUID</span>
+            <span class="dim">
+              <span x-text="dayName(state.day_of_week)"></span>
+              · <span x-text="monthName(state.month)"></span>
+              <span x-text="state.day"></span>
+            </span>
+            <span class="gold" x-text="moneyBig(checking)"></span>
+          </header>
 
-      <nav class="dock flex justify-around py-3">
-        <button class="dock-btn pixel text-[9px] active">EMAIL</button>
-        <button class="dock-btn pixel text-[9px]">HOME</button>
-        <button class="dock-btn pixel text-[9px]">BANK</button>
-        <button class="dock-btn pixel text-[9px]">HEALTH</button>
-      </nav>
+          <!-- ===== app area ===== -->
+          <main class="app-area">
+
+            <!-- ---------- HOME ---------- -->
+            <section x-show="activeApp === 'home'" class="col g-10">
+              <div class="card col g-6">
+                <div class="row">
+                  <span class="sub-h" x-text="houseName(state.house.tier)"></span>
+                  <span class="pill dim" x-text="'Rent ' + moneyBig(state.house.monthly_rent)"></span>
+                </div>
+                <p class="text-sm leading-snug" x-text="houseFlavor(state.house.tier)"></p>
+
+                <div class="col g-4 mt-1">
+                  <div class="row text-xs">
+                    <span class="dim">Shoddiness</span>
+                    <span x-text="state.house.shoddiness + '/10'"></span>
+                  </div>
+                  <div class="bar bad"><span :style="`width: ${state.house.shoddiness * 10}%`"></span></div>
+
+                  <div class="row text-xs mt-1">
+                    <span class="dim">Durability</span>
+                    <span x-text="state.house.durability + '/10'"></span>
+                  </div>
+                  <div class="bar"><span :style="`width: ${state.house.durability * 10}%`"></span></div>
+                </div>
+
+                <div class="row text-xs mt-2 dim">
+                  <span x-text="state.house.distance_to_work_km + ' km to work'"></span>
+                  <span x-text="'Day ' + state.day + ' · ' + dayName(state.day_of_week)"></span>
+                </div>
+              </div>
+
+              <div class="col g-6">
+                <button class="btn-q" @click="advanceDay()">Advance one day</button>
+                <button class="btn-q mag" @click="advanceUntilEvent()">Advance until event</button>
+              </div>
+
+              <div class="card col g-6">
+                <span class="sub-h">Upcoming · next 10 days</span>
+                <template x-if="upcomingCalendar.length === 0">
+                  <p class="dim text-sm">No scheduled events.</p>
+                </template>
+                <template x-for="c in upcomingCalendar" :key="c.month + '-' + c.day + '-' + c.kind">
+                  <div class="row text-sm" style="padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                    <div class="col">
+                      <span x-text="calendarLabel(c.kind)"></span>
+                      <span class="text-xs dim" x-text="monthName(c.month) + ' ' + c.day"></span>
+                    </div>
+                    <span :class="calendarTone(c.kind)" x-text="moneyBig(c.amount)"></span>
+                  </div>
+                </template>
+              </div>
+            </section>
+
+            <!-- ---------- BANK ---------- -->
+            <section x-show="activeApp === 'bank'" class="col g-10">
+
+              <div class="card col g-6 items-center">
+                <span class="sub-h">Credit score</span>
+                <div
+                  class="gauge"
+                  :style="`--pct: ${scorePct(state.credit_score)}; --band: ${scoreBand(state.credit_score)}`"
+                >
+                  <div class="gauge-inner">
+                    <div class="gauge-val" x-text="state.credit_score"></div>
+                    <div class="gauge-label">300 – 850</div>
+                  </div>
+                </div>
+                <div class="row w-full text-xs">
+                  <span class="dim">Net worth</span>
+                  <span :class="netWorth >= 0 ? 'neon' : 'text-[color:var(--danger)]'"
+                        x-text="moneyBig(netWorth)"></span>
+                </div>
+              </div>
+
+              <!-- Accounts -->
+              <div class="card col g-6">
+                <span class="sub-h">Accounts</span>
+                <div class="row">
+                  <div class="col g-4">
+                    <span class="text-xs dim">Checking</span>
+                    <span class="gold text-lg" x-text="money(checking)"></span>
+                  </div>
+                  <div class="col g-4" style="text-align:right">
+                    <span class="text-xs dim">Savings</span>
+                    <span class="neon text-lg" x-text="money(savings)"></span>
+                  </div>
+                </div>
+
+                <template x-if="state.accounts.savings_goal">
+                  <div class="col g-4 mt-1">
+                    <div class="row text-xs">
+                      <span class="dim" x-text="'Goal · ' + state.accounts.savings_goal.name"></span>
+                      <span x-text="moneyBig(savings) + ' / ' + moneyBig(state.accounts.savings_goal.target)"></span>
+                    </div>
+                    <div class="bar gold">
+                      <span :style="`width: ${Math.min(100, (savings / state.accounts.savings_goal.target) * 100)}%`"></span>
+                    </div>
+                  </div>
+                </template>
+
+                <div class="row mt-2 g-6" style="gap:6px">
+                  <button class="btn-q muted" style="flex:1" @click="showToast('Transfer UI — Phase 2.')">Transfer</button>
+                  <button class="btn-q muted" style="flex:1" @click="showToast('Budget modal — Phase 2.')">Set budget</button>
+                </div>
+              </div>
+
+              <!-- Credit card -->
+              <template x-if="state.credit_card">
+                <div class="card col g-6">
+                  <div class="row">
+                    <span class="sub-h">Credit card</span>
+                    <span class="pill warn" x-text="'APR ' + Math.round(state.credit_card.apr * 100) + '%'"></span>
+                  </div>
+                  <div class="row">
+                    <span class="dim text-xs">Balance</span>
+                    <span x-text="money(state.credit_card.balance) + ' / ' + moneyBig(state.credit_card.limit)"></span>
+                  </div>
+                  <div class="bar mag">
+                    <span :style="`width: ${Math.min(100, (state.credit_card.balance / state.credit_card.limit) * 100)}%`"></span>
+                  </div>
+                  <div class="row text-xs dim">
+                    <span x-text="'Due day ' + state.credit_card.due_day"></span>
+                    <span x-text="'Min ' + Math.round(state.credit_card.min_payment_pct * 100) + '%'"></span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Loans -->
+              <template x-if="state.loans.length > 0">
+                <div class="card col g-6">
+                  <span class="sub-h">Loans</span>
+                  <template x-for="(loan, i) in state.loans" :key="i">
+                    <div class="col g-4">
+                      <div class="row text-sm">
+                        <span class="uppercase" x-text="loan.kind"></span>
+                        <span x-text="moneyBig(loan.remaining) + ' / ' + moneyBig(loan.principal)"></span>
+                      </div>
+                      <div class="bar warn">
+                        <span :style="`width: ${Math.max(0, 100 - (loan.remaining / Math.max(1, loan.principal)) * 100)}%`"></span>
+                      </div>
+                      <div class="row text-xs dim">
+                        <span x-text="'APR ' + Math.round(loan.apr * 100) + '% · due day ' + loan.due_day"></span>
+                        <span x-text="loan.payments_made + ' paid · ' + loan.payments_missed + ' missed'"></span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+
+              <!-- Products / unlocks -->
+              <div class="card col g-6">
+                <span class="sub-h">Products</span>
+                <template x-for="key in ['cc_starter','personal_loan','savings_premium','cc_better','deposit','investments','mortgage']" :key="key">
+                  <div class="card-tight"
+                       style="background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;"
+                       :class="productStatus(key) === 'locked_visible' ? 'locked' : ''">
+                    <div class="row">
+                      <span class="text-sm" x-text="productLabel(key)"></span>
+                      <span :class="productStatus(key) === 'active' ? 'pill' : 'pill dim'"
+                            x-text="productStatus(key) === 'active' ? 'Unlocked' : 'Locked'"></span>
+                    </div>
+                    <p class="text-xs dim" x-text="productBlurb(key)"></p>
+                    <template x-if="productStatus(key) === 'locked_visible'">
+                      <p class="text-xs" style="color: var(--warn)" x-text="'Needs: ' + productRequirement(key)"></p>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </section>
+
+            <!-- ---------- HEALTH ---------- -->
+            <section x-show="activeApp === 'health'" class="col g-10">
+
+              <div class="card col g-6">
+                <span class="sub-h">Stats</span>
+                <template x-for="key in ['health','hunger','sanity','energy']" :key="key">
+                  <div class="col g-4">
+                    <div class="row text-xs">
+                      <span class="capitalize" x-text="key"></span>
+                      <span x-text="state.player.stats[key] + ' / 100'"></span>
+                    </div>
+                    <div class="bar"
+                         :class="state.player.stats[key] < 25 ? 'bad' : (state.player.stats[key] < 50 ? 'warn' : '')">
+                      <span :style="`width: ${Math.max(0, Math.min(100, state.player.stats[key]))}%`"></span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <div class="card col g-6">
+                <span class="sub-h">Skills</span>
+                <template x-for="skill in ['cooking','handiwork','charisma','physique']" :key="skill">
+                  <div class="col g-4">
+                    <div class="row text-xs">
+                      <span class="capitalize" x-text="skill"></span>
+                      <span x-text="'LV ' + state.player.skills[skill] + ' / 10'"></span>
+                    </div>
+                    <div class="bar gold">
+                      <span :style="`width: ${state.player.skills[skill] * 10}%`"></span>
+                    </div>
+                    <div class="row text-[10px] dim">
+                      <span x-text="(state.player.skill_practice_counts[skill] || 0) + ' attempt(s) at this level'"></span>
+                      <button class="btn-q muted"
+                              style="padding: 4px 8px; font-size: 8px;"
+                              :disabled="state.actions_today === 0"
+                              @click="practiceSkill(skill)">
+                        Practice
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <div class="card col g-6">
+                <div class="row">
+                  <span class="sub-h">Daily action</span>
+                  <span :class="state.actions_today > 0 ? 'pill' : 'pill dim'"
+                        x-text="state.actions_today > 0 ? 'Available' : 'Used'"></span>
+                </div>
+                <button class="btn-q"
+                        :disabled="state.actions_today === 0"
+                        @click="rest()">
+                  Rest
+                </button>
+                <p class="text-xs dim">Recovers sanity and energy. Consumes today's action.</p>
+              </div>
+            </section>
+
+            <!-- ---------- EMAIL ---------- -->
+            <section x-show="activeApp === 'email'" class="col g-10">
+
+              <!-- list view -->
+              <template x-if="!openEvent">
+                <div class="col g-6">
+                  <div class="row">
+                    <span class="sub-h">Inbox</span>
+                    <span class="pill dim" x-text="unreadCount + ' unread'"></span>
+                  </div>
+
+                  <template x-if="inboxSorted.length === 0">
+                    <p class="dim text-sm">No messages yet. Try "advance until event" from Home.</p>
+                  </template>
+
+                  <template x-for="ref in inboxSorted" :key="ref.event_id">
+                    <div class="inbox-row" :class="ref.status === 'unread' ? 'unread' : ''"
+                         @click="openEventId = ref.event_id; lastResolution = null">
+                      <div class="unread-dot" x-show="ref.status === 'unread'"></div>
+                      <div class="col g-4" style="flex:1; min-width:0;">
+                        <div class="row text-xs dim">
+                          <span x-text="ref.event.sender || 'Unknown'"></span>
+                          <span x-text="monthName(ref.received_month) + ' ' + ref.received_day"></span>
+                        </div>
+                        <span class="text-sm truncate" x-text="ref.event.title"></span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+
+              <!-- detail view -->
+              <template x-if="openEvent">
+                <div class="col g-8">
+                  <button class="btn-q muted" style="align-self:flex-start; padding: 4px 10px; font-size: 8px;"
+                          @click="openEventId = null; lastResolution = null">
+                    ← Back
+                  </button>
+
+                  <div class="col g-4">
+                    <span class="text-xs dim"
+                          x-text="openEvent.event.sender + ' · ' + monthName(openEvent.received_month) + ' ' + openEvent.received_day"></span>
+                    <h2 class="pixel text-sm magenta" x-text="openEvent.event.title"></h2>
+                  </div>
+
+                  <div class="text-sm leading-snug" x-html="tinyMd(openEvent.event.body)"></div>
+
+                  <!-- options -->
+                  <template x-if="!lastResolution">
+                    <div class="col g-6">
+                      <template x-for="opt in openEvent.event.options" :key="opt.id">
+                        <div class="option-card"
+                             :class="rollingEventId ? 'disabled' : ''"
+                             @click="rollingEventId || resolveOption(opt)">
+                          <div class="row">
+                            <span class="text-sm" x-text="opt.label"></span>
+                            <template x-if="opt.skill_check">
+                              <span class="pill warn"
+                                    x-text="opt.skill_check.skill + ' DC ' + opt.skill_check.difficulty_class"></span>
+                            </template>
+                            <template x-if="!opt.skill_check">
+                              <span class="pill">Auto</span>
+                            </template>
+                          </div>
+                          <div class="row text-xs dim mt-1">
+                            <span x-text="opt.hint || ''"></span>
+                            <span x-text="successPct(opt) + '% success'"></span>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+
+                  <!-- resolution -->
+                  <template x-if="lastResolution">
+                    <div class="card col g-6 items-center text-center roll-result">
+                      <span class="pixel text-xs dim">ROLL</span>
+                      <span class="pixel text-3xl"
+                            :class="lastResolution.passed ? 'flash-pass' : 'flash-fail'"
+                            x-text="lastResolution.rolled"></span>
+                      <span class="text-xs dim"
+                            x-text="lastResolution.dc ? ('vs DC ' + lastResolution.dc) : 'no check'"></span>
+                      <span class="pixel text-sm"
+                            :class="lastResolution.passed ? 'flash-pass' : 'flash-fail'"
+                            x-text="lastResolution.passed ? 'SUCCESS' : 'FAILURE'"></span>
+
+                      <div class="col g-4 w-full mt-2" x-show="lastResolution.effects && Object.keys(lastResolution.effects).length">
+                        <span class="sub-h">Effects</span>
+                        <template x-for="fx in Object.entries(lastResolution.effects || {})" :key="fx[0]">
+                          <div class="row text-sm">
+                            <span class="capitalize" x-text="fx[0]"></span>
+                            <span :class="fx[1] >= 0 ? 'neon' : 'text-[color:var(--danger)]'"
+                                  x-text="fx[0] === 'money' ? ((fx[1] >= 0 ? '+' : '') + moneyBig(fx[1])) : ((fx[1] >= 0 ? '+' : '') + fx[1])"></span>
+                          </div>
+                        </template>
+                      </div>
+
+                      <template x-if="lastResolution.local">
+                        <span class="text-[10px] dim">local resolution — /api/event/resolve not wired yet</span>
+                      </template>
+
+                      <button class="btn-q mt-2" @click="openEventId = null; lastResolution = null">Close</button>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </section>
+
+          </main>
+
+          <!-- ===== toast ===== -->
+          <template x-if="toast">
+            <div class="toast" x-text="toast"></div>
+          </template>
+
+          <!-- ===== game over ===== -->
+          <template x-if="state.game_over">
+            <div class="game-over-overlay">
+              <h2>GAME OVER</h2>
+              <p class="text-sm" x-text="'Cause: ' + state.game_over.cause"></p>
+              <p class="text-sm italic" style="color: var(--fg-dim); max-width: 260px;"
+                 x-text="state.game_over.flavor"></p>
+              <button class="btn-q mag mt-2" @click="newGame(true)">New game</button>
+            </div>
+          </template>
+
+          <!-- ===== dock ===== -->
+          <nav class="dock">
+            <button class="dock-btn" style="position:relative" :class="activeApp === 'email' ? 'active' : ''" @click="setApp('email')">
+              <span class="unread-dot" x-show="unreadCount > 0"
+                    style="position:absolute; top:2px; right:10px; width:7px; height:7px;"></span>
+              <span class="icon">✉</span>
+              <span class="pixel">EMAIL</span>
+            </button>
+            <button class="dock-btn" :class="activeApp === 'home' ? 'active' : ''" @click="setApp('home')">
+              <span class="icon">⌂</span>
+              <span class="pixel">HOME</span>
+            </button>
+            <button class="dock-btn" :class="activeApp === 'bank' ? 'active' : ''" @click="setApp('bank')">
+              <span class="icon">₿</span>
+              <span class="pixel">BANK</span>
+            </button>
+            <button class="dock-btn" :class="activeApp === 'health' ? 'active' : ''" @click="setApp('health')">
+              <span class="icon">♥</span>
+              <span class="pixel">HEALTH</span>
+            </button>
+          </nav>
+
+        </div>
+      </template>
     </div>
   </div>
 
-  <script>
-    const SCHEMA_VERSION = 1;
-    const STORAGE_KEY = "quid.state.v1";
+  <!-- dev tools: visible in dev only; small + out of the way -->
+  <div class="dev-bar">
+    <button @click="newGame(true)">new game</button>
+    <button @click="loadFakeState()">load fake</button>
+    <button @click="exportSave()" x-show="state">export</button>
+  </div>
 
-    function quid() {
-      return {
-        state: null,
-        async boot() {
-          const cached = localStorage.getItem(STORAGE_KEY);
-          if (cached) {
-            try {
-              const parsed = JSON.parse(cached);
-              if (parsed.schema_version === SCHEMA_VERSION) {
-                this.state = parsed;
-                return;
-              }
-            } catch (_) {}
-            localStorage.removeItem(STORAGE_KEY);
-          }
-          await this.newGame();
-        },
-        async newGame() {
-          const r = await fetch("/api/new-game", { method: "POST" });
-          const data = await r.json();
-          this.state = data.state;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-        },
-        money(grosze) {
-          return (grosze / 100).toFixed(2) + " z\u0142";
-        },
-      };
-    }
-  </script>
 </body>
 </html>
