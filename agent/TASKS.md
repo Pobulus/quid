@@ -385,7 +385,13 @@ DaisyUI custom theme: base `#0a0a14`, primary `#00ffc3`, secondary `#ff0080`, ac
 
 Play through 3 months start to finish. Fix anything that crashes. Accept jank that doesn’t crash.
 
-### T3.6 — **[URGENT]** Lock resolved events (no re-roll)
+### T3.6 — Remove slug from SAGE prompt — assign UUID server-side
+
+**Owner:** Track B. The system prompt currently asks the LLM to generate a `slug` field. The LLM should not own event identity.
+
+Fix in `sage.py`: remove `slug` from the prompt schema and the Pydantic `_Event` validator. After `validate_event` passes, assign `event_id = str(uuid.uuid4())` server-side before `push_to_inbox`. Update `recent_events` dedup to use a server-chosen key (e.g. first 5 words of title lowercased) instead of LLM slug. No frontend change — frontend already uses `event_id` for lookup.
+
+### T3.7 — **[URGENT]** Lock resolved events (no re-roll)
 
 **Owner:** Track C (UI). Once a player resolves an event (picks option → d20 fires → outcome shown), they can currently roll again — re-rolling changes the outcome retroactively.
 

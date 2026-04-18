@@ -220,7 +220,6 @@ OPTION SHAPE (uniform — every option has the same shape):
                     OR null,
     "effects_on_success": {<effect_key>: <int>, ...},
     "effects_on_failure": {<effect_key>: <int>, ...},
-    "hint": "<one short sentence the player sees before picking>"
   }
 
 If skill_check is null, effects_on_success and effects_on_failure MUST be the
@@ -245,13 +244,13 @@ EXAMPLE (study the shape, do not copy verbatim):
     {"id": "a", "label": "Fix it yourself",
      "skill_check": {"skill": "handiwork", "difficulty_class": 12},
      "effects_on_success": {"handiwork": 1, "sanity": -5},
-     "effects_on_failure": {"money": -25000, "sanity": -10},
-     "hint": "Handiwork DC 12. Fail = plumber call-out fee."},
+     "effects_on_failure": {"money": -25000, "sanity": -10}
+     },
     {"id": "b", "label": "Pay a plumber",
      "skill_check": null,
      "effects_on_success": {"money": -30000, "sanity": -2},
-     "effects_on_failure": {"money": -30000, "sanity": -2},
-     "hint": "Safe. Costs 300 PLN."}
+     "effects_on_failure": {"money": -30000, "sanity": -2}
+     }
   ]
 }
 
