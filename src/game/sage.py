@@ -20,10 +20,12 @@ prompt enforces that contract by example.
 from __future__ import annotations
 
 import json
+import os
 import random
 import uuid
 from typing import Any, Callable, Optional
 
+import requests
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from game import balance as B
@@ -459,3 +461,40 @@ def generate_event_via_llm(
 
     fallback = generate_event(state, rng=rng)
     return fallback, "fallback"
+
+
+# ---- Ollama HTTP client (B2) ----------------------------------------------------
+
+
+OLLAMA_TIMEOUT_S = 30
+
+
+def call_ollama(system: str, user: str) -> Any:
+    """POST to {OLLAMA_HOST}/api/chat with format=json. Returns parsed JSON
+    (list of events per _SYSTEM_PROMPT). Raises on transport or decode errors —
+    `generate_event_via_llm` catches and falls back.
+    """
+    host = os.getenv("OLLAMA_HOST", "").strip().rstrip("/")
+    model = os.getenv("OLLAMA_MODEL", "gemma2").strip()
+    if not host:
+        raise RuntimeError("OLLAMA_HOST not set")
+
+    resp = requests.post(
+        f"{host}/api/chat",
+        json={
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "format": "json",
+            "stream": False,
+        },
+        timeout=OLLAMA_TIMEOUT_S,
+    )
+    resp.raise_for_status()
+    body = resp.json()
+    content = body.get("message", {}).get("content", "")
+    if not content:
+        raise ValueError("empty content from Ollama")
+    return json.loads(content)

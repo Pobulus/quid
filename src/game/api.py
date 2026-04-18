@@ -88,9 +88,12 @@ def sage_event(request, payload: dict = Body(...)):
     if not force and rng.random() > prob:
         return {"state": state.to_dict(), "event": None, "probability": prob}
 
-    event = sage.generate_event(state, rng=rng)
+    if sage.OLLAMA_AVAILABLE:
+        event, source = sage.generate_event_via_llm(state, sage.call_ollama, rng=rng)
+    else:
+        event, source = sage.generate_event(state, rng=rng), "fallback"
     sage.push_to_inbox(state, event)
-    return {"state": state.to_dict(), "event": event, "probability": prob}
+    return {"state": state.to_dict(), "event": event, "probability": prob, "source": source}
 
 
 @api.post("/event/resolve")

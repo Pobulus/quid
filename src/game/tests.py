@@ -1,9 +1,10 @@
 from unittest.mock import patch
 
 from django.test import TestCase
+from pydantic import ValidationError
 
 from game import balance as B
-from game import events
+from game import events, sage
 from game.state import CalendarEvent, Loan, new_game
 
 
@@ -165,3 +166,150 @@ class InteractiveLoanInboxTest(TestCase):
         self.assertTrue(res["passed"])
         self.assertEqual(s.inbox[0].status, "resolved")
         self.assertEqual(s.loans[0].remaining, 0)
+
+
+def _valid_event(**overrides) -> dict:
+    ev = {
+        "title": "Test event",
+        "sender": "Nobody",
+        "body": "Body.",
+        "options": [
+            {
+                "id": "a",
+                "label": "Do the thing",
+                "skill_check": {"skill": "handiwork", "difficulty_class": 12},
+                "effects_on_success": {"money": 1000},
+                "effects_on_failure": {"money": -1000},
+            },
+            {
+                "id": "b",
+                "label": "Skip",
+                "skill_check": None,
+                "effects_on_success": {"sanity": -2},
+                "effects_on_failure": {"sanity": -2},
+            },
+        ],
+    }
+    ev.update(overrides)
+    return ev
+
+
+class SageTest(TestCase):
+    def test_validate_event_rejects_unknown_effect_key(self):
+        ev = _valid_event()
+        ev["options"][0]["effects_on_success"] = {"karma": 5}
+        with self.assertRaises(ValidationError):
+            sage.validate_event(ev)
+
+    def test_validate_event_rejects_out_of_bounds_delta(self):
+        ev = _valid_event()
+        ev["options"][0]["effects_on_success"] = {"sanity": 999}
+        ev["options"][0]["effects_on_failure"] = {"sanity": 999}
+        with self.assertRaises(ValidationError):
+            sage.validate_event(ev)
+
+    def test_validate_event_rejects_no_check_with_differing_effects(self):
+        ev = _valid_event()
+        ev["options"][1]["effects_on_failure"] = {"sanity": -5}
+        with self.assertRaises(ValidationError):
+            sage.validate_event(ev)
+
+    def test_validate_event_accepts_valid_payload(self):
+        out = sage.validate_event(_valid_event())
+        self.assertEqual(out["title"], "Test event")
+        self.assertNotIn("event_id", out)
+
+    def test_validate_batch_assigns_uuid_event_id(self):
+        batch = sage._validate_batch([_valid_event(), _valid_event(title="Second")])
+        self.assertEqual(len(batch), 2)
+        for ev in batch:
+            self.assertIn("event_id", ev)
+            self.assertEqual(len(ev["event_id"]), 32)
+        self.assertNotEqual(batch[0]["event_id"], batch[1]["event_id"])
+
+    def test_validate_batch_rejects_non_list(self):
+        with self.assertRaises(ValueError):
+            sage._validate_batch({"not": "a list"})
+
+    def test_resolve_event_raises_when_already_resolved(self):
+        s = new_game(seed=1)
+        ev = _valid_event()
+        ev["event_id"] = "abc123"
+        sage.push_to_inbox(s, ev)
+        sage.resolve_event(s, event_id="abc123", option_id="b", roll_d20=10)
+        with self.assertRaises(ValueError):
+            sage.resolve_event(s, event_id="abc123", option_id="b", roll_d20=10)
+
+    def test_resolve_event_applies_success_branch(self):
+        s = new_game(seed=1)
+        s.player.skills["handiwork"] = 10
+        before = s.accounts.checking
+        ev = _valid_event()
+        ev["event_id"] = "ev_pass"
+        sage.push_to_inbox(s, ev)
+        res = sage.resolve_event(s, event_id="ev_pass", option_id="a", roll_d20=20)
+        self.assertTrue(res["passed"])
+        self.assertEqual(s.accounts.checking - before, 1000)
+
+    def test_resolve_event_applies_failure_branch(self):
+        s = new_game(seed=1)
+        s.player.skills["handiwork"] = 0
+        before = s.accounts.checking
+        ev = _valid_event()
+        ev["event_id"] = "ev_fail"
+        sage.push_to_inbox(s, ev)
+        res = sage.resolve_event(s, event_id="ev_fail", option_id="a", roll_d20=1)
+        self.assertFalse(res["passed"])
+        self.assertEqual(s.accounts.checking - before, -1000)
+
+    def test_resolve_event_rejects_bad_roll(self):
+        s = new_game(seed=1)
+        ev = _valid_event()
+        ev["event_id"] = "ev_x"
+        sage.push_to_inbox(s, ev)
+        with self.assertRaises(ValueError):
+            sage.resolve_event(s, event_id="ev_x", option_id="a", roll_d20=0)
+
+    def test_generate_event_via_llm_falls_back_when_unavailable(self):
+        s = new_game(seed=1)
+        with patch.object(sage, "OLLAMA_AVAILABLE", False):
+            ev, src = sage.generate_event_via_llm(s, call_fn=lambda *_: None)
+        self.assertEqual(src, "fallback")
+        self.assertIn("options", ev)
+
+    def test_generate_event_via_llm_caches_batch_remainder(self):
+        s = new_game(seed=1)
+        batch = [_valid_event(title=f"E{i}") for i in range(3)]
+
+        def fake_call(system, user):
+            return batch
+
+        with patch.object(sage, "OLLAMA_AVAILABLE", True):
+            ev1, src1 = sage.generate_event_via_llm(s, fake_call)
+            self.assertEqual(src1, "llm")
+            self.assertEqual(len(s.flags.get("event_queue", [])), 2)
+            ev2, src2 = sage.generate_event_via_llm(s, fake_call)
+            self.assertEqual(src2, "llm_queue")
+            self.assertEqual(len(s.flags.get("event_queue", [])), 1)
+            self.assertNotEqual(ev1["event_id"], ev2["event_id"])
+
+    def test_generate_event_via_llm_retries_then_falls_back(self):
+        s = new_game(seed=1)
+        calls = {"n": 0}
+
+        def bad_call(system, user):
+            calls["n"] += 1
+            return [{"title": "bad", "sender": "x", "body": "y", "options": []}]
+
+        with patch.object(sage, "OLLAMA_AVAILABLE", True):
+            ev, src = sage.generate_event_via_llm(s, bad_call)
+        self.assertEqual(src, "fallback")
+        self.assertEqual(calls["n"], 2)
+
+    def test_event_probability_monotonic_with_stress(self):
+        s = new_game(seed=1)
+        base = sage.event_probability(s)
+        s.player.stats["hunger"] = 0
+        s.player.stats["sanity"] = 0
+        stressed = sage.event_probability(s)
+        self.assertGreaterEqual(stressed, base)
