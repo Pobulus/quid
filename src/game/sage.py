@@ -29,6 +29,7 @@ from django.conf import settings
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from game import balance as B
+from game import finance as _finance
 from game.events_fallback import FALLBACK_EVENTS
 from game.state import EventRef, GameState, RecentEvent
 
@@ -122,6 +123,8 @@ def apply_effects(state: GameState, effects: dict) -> dict:
             state.accounts.checking += delta
             applied[key] = delta
         elif key in B.STAT_KEYS:
+            if key == "sanity" and delta < 0:
+                delta = -_finance.absorb_sanity_loss(state, -delta)
             before = state.player.stats[key]
             state.player.stats[key] = _clamp_stat(before + delta)
             applied[key] = state.player.stats[key] - before

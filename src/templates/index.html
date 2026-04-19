@@ -537,15 +537,18 @@
                 </div>
 
                 <div class="col g-4">
-                  <span class="text-xs dim">Leisure (PLN, cosmetic)</span>
-                  <input type="number" min="0" class="budget-input"
+                  <div class="row text-xs">
+                    <span class="dim">Leisure</span>
+                    <span class="gold" x-text="(budgetDraft.leisure || 0) + ' PLN · ' + Math.floor((budgetDraft.leisure || 0) / LEISURE_PLN_PER_SANITY) + ' pt'"></span>
+                  </div>
+                  <input type="range" min="0" max="500" step="10" class="leisure-slider"
                          x-model.number="budgetDraft.leisure" />
-                </div>
-
-                <div class="col g-4">
-                  <span class="text-xs dim">Bills buffer (PLN, cosmetic)</span>
-                  <input type="number" min="0" class="budget-input"
-                         x-model.number="budgetDraft.bills_buffer" />
+                  <span class="text-[10px] dim">
+                    Each <span x-text="LEISURE_PLN_PER_SANITY"></span> PLN absorbs 1 sanity loss this month.
+                    Buffer remaining this month:
+                    <span class="neon" x-text="leisureSanityRemaining + ' pt'"></span>.
+                    Raising charges the difference from checking immediately.
+                  </span>
                 </div>
 
                 <button class="btn-q mag" :disabled="budgetSaving" @click="saveBudget()">

@@ -35,6 +35,8 @@ STAT_KEYS = ("health", "hunger", "sanity", "energy")
 SKILL_KEYS = ("cooking", "handiwork", "charisma", "physique")
 
 # Daily passive decay (applied each day tick before events).
+LEISURE_PLN_PER_SANITY = 10  # leisure budget: every 10 PLN absorbs 1 point of sanity loss per month
+
 STAT_DECAY_PER_DAY = {
     "health": 0,
     "hunger": 4,

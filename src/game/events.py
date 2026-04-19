@@ -24,7 +24,10 @@ GAME_OVER_FLAVOR = {
 
 def _apply_stat_decay(state: GameState) -> None:
     for key, amt in B.STAT_DECAY_PER_DAY.items():
-        state.player.stats[key] = max(0, state.player.stats[key] - amt)
+        loss = amt
+        if key == "sanity" and loss > 0:
+            loss = F.absorb_sanity_loss(state, loss)
+        state.player.stats[key] = max(0, state.player.stats[key] - loss)
 
 
 
@@ -271,6 +274,22 @@ def _rollover_month(state: GameState) -> list[str]:
     state.player.workdays_this_month = 0
     state.flags.pop("took_bnpl_this_month", None)
     state.flags["monthly_expenses"] = []
+    state.flags["leisure_sanity_used"] = 0
+
+    budget = state.flags.get("budget") or {}
+    leisure_pln = int(budget.get("leisure", 0) or 0)
+    if leisure_pln > 0:
+        charge = leisure_pln * 100
+        if state.accounts.checking < charge:
+            affordable_pln = max(0, state.accounts.checking // 100)
+            charge = affordable_pln * 100
+            budget["leisure"] = affordable_pln
+            state.flags["budget"] = budget
+            logs.append(f"Leisure trimmed to {affordable_pln} PLN (couldn't afford more)")
+        if charge > 0:
+            state.accounts.checking -= charge
+            _record_leisure_expense(state, charge)
+            logs.append(f"Leisure: -{charge/100:.2f} PLN")
 
     _, interest_logs = F.apply_monthly_interest(state)
     logs.extend(interest_logs)
@@ -427,21 +446,42 @@ def rest(state: GameState) -> tuple[GameState, str]:
 
 
 def set_budget(state: GameState, budget: dict) -> tuple[GameState, str]:
-    """Stores budget in flags. `food_tier` is mechanical; other lines are visual.
-
-    Accepts int values for arbitrary envelope labels (food/leisure/bills_buffer,
-    all cosmetic) plus an optional `food_tier` in {cheap, normal, premium}.
+    """Stores budget in flags. `food_tier` selects daily food mechanics;
+    `leisure` is a per-month sanity-absorption fund (10 PLN absorbs 1 sanity loss)
+    and is charged from checking on the delta when raised within a month.
     """
+    existing = dict(state.flags.get("budget", {}))
     stored: dict = {}
     for k, v in budget.items():
         if k == "food_tier":
             if v not in B.FOOD_TIER_ORDER:
                 return state, f"invalid food_tier: {v}"
             stored["food_tier"] = v
-        else:
-            stored[k] = int(v)
-    existing = state.flags.get("budget", {})
+        elif k == "leisure":
+            stored["leisure"] = max(0, int(v))
+
+    if "leisure" in stored:
+        prev_leisure = int(existing.get("leisure", 0) or 0)
+        delta_pln = stored["leisure"] - prev_leisure
+        if delta_pln > 0:
+            charge = delta_pln * 100
+            if state.accounts.checking < charge:
+                return state, "not enough money for that leisure budget"
+            state.accounts.checking -= charge
+            _record_leisure_expense(state, charge)
+
     existing.update(stored)
     state.flags["budget"] = existing
     state.flags["budget_set_month"] = state.month
     return state, f"Budget set for month {state.month}"
+
+
+def _record_leisure_expense(state: GameState, amount_grosze: int) -> None:
+    if amount_grosze <= 0:
+        return
+    expenses = state.flags.setdefault("monthly_expenses", [])
+    for e in expenses:
+        if e.get("label") == "Leisure":
+            e["amount"] = int(e.get("amount", 0)) + int(amount_grosze)
+            return
+    expenses.append({"label": "Leisure", "amount": int(amount_grosze)})

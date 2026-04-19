@@ -184,6 +184,7 @@ function quid() {
     depositSaving: false,
     DEPOSIT_TERMS: DEPOSIT_TERMS,
     DEPOSIT_MONTHLY_RATE_PCT: DEPOSIT_MONTHLY_RATE_PCT,
+    LEISURE_PLN_PER_SANITY: 10,
     loanModalOpen: false,
     loanDraft: { kind: "personal", amount_pln: 0 },
     loanSaving: false,
@@ -192,7 +193,7 @@ function quid() {
     ccApplySaving: false,
     budgetModalOpen: false,
     budgetModalRequired: false,   // true when server gated on budget_required — modal can't be dismissed
-    budgetDraft: { food_tier: FOOD_DEFAULT_TIER, leisure: 0, bills_buffer: 0 },
+    budgetDraft: { food_tier: FOOD_DEFAULT_TIER, leisure: 0 },
     budgetSaving: false,
     dayPulse: false,
     dayPulseTimer: null,
@@ -344,6 +345,14 @@ function quid() {
         .filter((c) => c._sort >= 0)
         .sort((a, b) => a._sort - b._sort)
         .slice(0, 10);
+    },
+
+    get leisureSanityRemaining() {
+      const budget = this.state?.flags?.budget || {};
+      const leisure = parseInt(budget.leisure, 10) || 0;
+      const cap = Math.floor(leisure / this.LEISURE_PLN_PER_SANITY);
+      const used = parseInt(this.state?.flags?.leisure_sanity_used, 10) || 0;
+      return Math.max(0, cap - used);
     },
 
     get monthlyExpenses() {
@@ -643,11 +652,27 @@ function quid() {
         } else if (k === "credit_score") {
           s.credit_score = Math.max(300, Math.min(850, s.credit_score + v));
         } else if (STATS.includes(k)) {
-          s.player.stats[k] = Math.max(0, Math.min(100, s.player.stats[k] + v));
+          let delta = v;
+          if (k === "sanity" && delta < 0) delta = -this.absorbSanityLoss(-delta);
+          s.player.stats[k] = Math.max(0, Math.min(100, s.player.stats[k] + delta));
         } else if (SKILLS.includes(k)) {
           s.player.skills[k] = Math.max(0, Math.min(10, s.player.skills[k] + v));
         }
       }
+    },
+
+    absorbSanityLoss(lossAbs) {
+      if (lossAbs <= 0) return lossAbs;
+      if (!this.state?.flags) return lossAbs;
+      const budget = this.state.flags.budget || {};
+      const cap = Math.floor((parseInt(budget.leisure, 10) || 0) / this.LEISURE_PLN_PER_SANITY);
+      if (cap <= 0) return lossAbs;
+      const used = parseInt(this.state.flags.leisure_sanity_used, 10) || 0;
+      const remaining = cap - used;
+      if (remaining <= 0) return lossAbs;
+      const absorbed = Math.min(remaining, lossAbs);
+      this.state.flags.leisure_sanity_used = used + absorbed;
+      return lossAbs - absorbed;
     },
 
     async advanceDay() {
@@ -822,7 +847,6 @@ function quid() {
       this.budgetDraft = {
         food_tier: cur.food_tier ?? FOOD_DEFAULT_TIER,
         leisure: cur.leisure ?? 0,
-        bills_buffer: cur.bills_buffer ?? 0,
       };
       this.budgetModalOpen = true;
     },
@@ -847,7 +871,6 @@ function quid() {
       const budget = {
         food_tier: d.food_tier,
         leisure: Math.max(0, parseInt(d.leisure, 10) || 0),
-        bills_buffer: Math.max(0, parseInt(d.bills_buffer, 10) || 0),
       };
       const data = await this.postAction("/api/set-budget", { budget });
       this.budgetSaving = false;

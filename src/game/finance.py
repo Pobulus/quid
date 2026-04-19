@@ -13,6 +13,30 @@ def _clamp(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, v))
 
 
+def absorb_sanity_loss(state: GameState, loss_abs: int) -> int:
+    """Consume monthly leisure buffer to reduce a sanity loss.
+
+    `loss_abs` is a non-negative magnitude (the caller supplies the sign).
+    Returns the reduced loss after absorption. Buffer is `leisure_pln //
+    LEISURE_PLN_PER_SANITY` points, tracked per-month via
+    `flags.leisure_sanity_used`.
+    """
+    if loss_abs <= 0:
+        return loss_abs
+    budget = state.flags.get("budget") or {}
+    leisure_pln = int(budget.get("leisure", 0) or 0)
+    cap = leisure_pln // B.LEISURE_PLN_PER_SANITY
+    if cap <= 0:
+        return loss_abs
+    used = int(state.flags.get("leisure_sanity_used", 0) or 0)
+    remaining = cap - used
+    if remaining <= 0:
+        return loss_abs
+    absorbed = min(remaining, loss_abs)
+    state.flags["leisure_sanity_used"] = used + absorbed
+    return loss_abs - absorbed
+
+
 def _record_expense(state: GameState, label: str, amount: int) -> None:
     """Append a line to `state.flags['monthly_expenses']` so the UI can show
     where this month's money went. Amount is positive grosze spent."""
@@ -66,10 +90,15 @@ def apply_daily_food(state: GameState) -> tuple[GameState, str | None]:
             break
 
     stats = state.player.stats
+    def _apply_food_delta(key: str, delta: int) -> None:
+        if key == "sanity" and delta < 0:
+            delta = -absorb_sanity_loss(state, -delta)
+        stats[key] = _clamp(stats[key] + delta, 0, B.STAT_MAX)
+
     if afforded_idx is None:
         cfg = B.FOOD_TIERS["cheap"]
         for key in ("health", "sanity", "energy"):
-            stats[key] = _clamp(stats[key] + cfg[key], 0, B.STAT_MAX)
+            _apply_food_delta(key, cfg[key])
         return state, "No food today — eating scraps"
 
     tier_name = B.FOOD_TIER_ORDER[afforded_idx]
@@ -78,7 +107,7 @@ def apply_daily_food(state: GameState) -> tuple[GameState, str | None]:
     _bump_food_expense(state, tier_name, cfg["cost"])
     stats["hunger"] = _clamp(stats["hunger"] + cfg["daily_hunger"], 0, B.STAT_MAX)
     for key in ("health", "sanity", "energy"):
-        stats[key] = _clamp(stats[key] + cfg[key], 0, B.STAT_MAX)
+        _apply_food_delta(key, cfg[key])
     return state, None  # no per-day log spam; expense card shows the running total
 
 
