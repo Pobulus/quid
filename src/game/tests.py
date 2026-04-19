@@ -573,6 +573,56 @@ class FinanceTest(TestCase):
         with self.assertRaises(ValueError):
             finance.pay_credit_card(s, 50000)
 
+    # ---- T3.21: move_house ----
+
+    def test_move_house_upgrade_charges_fee_and_deposit(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 10**9  # ensure net-worth unlock passes and covers cost
+        before = s.accounts.checking
+        target_rent = B.HOUSE_TIERS["decent_rental"]["rent"]
+        deposit = B.DEPOSIT_RENT_MULTIPLIER * target_rent
+        s, msg = finance.move_house(s, "decent_rental")
+        self.assertEqual(s.house.tier, "decent_rental")
+        self.assertEqual(s.house.monthly_rent, target_rent)
+        self.assertEqual(s.accounts.checking, before - B.MOVE_UPGRADE_FEE - deposit)
+        self.assertEqual(s.flags["house_deposit_paid"], deposit)
+
+    def test_move_house_downgrade_refunds_deposit(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 10**9
+        s, _ = finance.move_house(s, "decent_rental")
+        deposit = s.flags["house_deposit_paid"]
+        before = s.accounts.checking
+        s, _ = finance.move_house(s, "shoddy_rental")
+        self.assertEqual(s.house.tier, "shoddy_rental")
+        self.assertEqual(s.accounts.checking, before - B.MOVE_DOWNGRADE_FEE + deposit)
+        self.assertEqual(s.flags["house_deposit_paid"], 0)
+
+    def test_move_house_rejects_unlock_not_met(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 0  # net worth well below the 3000 PLN unlock
+        with self.assertRaises(ValueError):
+            finance.move_house(s, "decent_rental")
+
+    def test_move_house_rejects_insufficient_funds(self):
+        # Unlock is met (net worth ≥ 300_000 grosze) but not the full move cost.
+        s = new_game(seed=1)
+        s.accounts.savings = 500000   # unlocks move_decent_rental
+        s.accounts.checking = 1000    # can't cover fee + deposit
+        with self.assertRaises(ValueError):
+            finance.move_house(s, "decent_rental")
+
+    def test_move_house_rejects_same_tier(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 10**9
+        with self.assertRaises(ValueError):
+            finance.move_house(s, s.house.tier)
+
+    def test_move_house_rejects_unknown_tier(self):
+        s = new_game(seed=1)
+        with self.assertRaises(ValueError):
+            finance.move_house(s, "mansion")
+
     def test_pay_credit_card_rejects_non_positive(self):
         s = self._cc_state()
         with self.assertRaises(ValueError):

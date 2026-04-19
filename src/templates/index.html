@@ -75,6 +75,8 @@
                   <span x-text="state.house.distance_to_work_km + ' km to work'"></span>
                   <span x-text="'Day ' + state.day + ' · ' + dayName(state.day_of_week)"></span>
                 </div>
+                <button class="btn-q muted" style="align-self:flex-start; padding: 4px 10px; font-size: 8px;"
+                        @click="openMoveModal()">Move…</button>
               </div>
 
               <div class="col g-6">
@@ -566,6 +568,38 @@
                 <button class="btn-q mag" :disabled="transferSaving" @click="saveTransfer()">
                   <span x-text="transferSaving ? 'Transferring…' : 'Transfer'"></span>
                 </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- ===== Move house modal (T3.21) ===== -->
+          <template x-if="moveModalOpen">
+            <div class="modal-overlay" @click.self="closeMoveModal()">
+              <div class="modal-panel col g-8">
+                <div class="row">
+                  <span class="sub-h">Move house</span>
+                  <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          @click="closeMoveModal()">Close</button>
+                </div>
+
+                <template x-for="tier in houseTierOrder()" :key="tier">
+                  <div class="option-card col g-4"
+                       :class="tier === state.house.tier ? 'disabled' : ''"
+                       @click="tier !== state.house.tier && confirmMove(tier)">
+                    <div class="row">
+                      <span class="sub-h" x-text="houseName(tier)"></span>
+                      <span class="pill dim" x-text="'Rent ' + moneyBig(moveTierInfo(tier).rent)"></span>
+                    </div>
+                    <div class="row text-xs dim">
+                      <span x-text="'Shoddiness ' + moveTierInfo(tier).shoddiness + '/10'"></span>
+                      <span x-text="'Durability ' + moveTierInfo(tier).durability + '/10'"></span>
+                      <span x-text="moveTierInfo(tier).distance_to_work_km + ' km'"></span>
+                    </div>
+                    <div class="text-xs" x-html="moveCostDescription(tier)"></div>
+                  </div>
+                </template>
+
+                <p class="text-xs dim">Upgrades require unlock + deposit; downgrades refund the prior deposit.</p>
               </div>
             </div>
           </template>

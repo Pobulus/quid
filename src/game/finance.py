@@ -290,6 +290,65 @@ def apply_for_credit_card(state: GameState, tier: str) -> tuple[GameState, str]:
     return state, f"Approved: {tier} credit card, limit {limit/100:.0f} PLN @ {apr*100:.0f}% APR"
 
 
+def move_house(state: GameState, target_tier: str) -> tuple[GameState, str]:
+    """Move to a different rental tier (upgrade or downgrade).
+
+    Upgrade: charges `MOVE_UPGRADE_FEE` + `DEPOSIT_RENT_MULTIPLIER × new rent`
+    from checking. Stores the paid deposit in `flags.house_deposit_paid` so a
+    later downgrade can refund it.
+    Downgrade: charges `MOVE_DOWNGRADE_FEE` and refunds the previously paid
+    deposit (if any) to checking.
+    Raises ValueError on unknown tier, same-tier moves, missing unlock (upgrade
+    only), or insufficient funds.
+    """
+    if target_tier not in B.HOUSE_TIERS:
+        raise ValueError(f"unknown house tier: {target_tier}")
+    current = state.house.tier
+    if target_tier == current:
+        raise ValueError("Already at that tier.")
+
+    order = B.HOUSE_TIER_ORDER
+    is_upgrade = order.index(target_tier) > order.index(current)
+    cfg = B.HOUSE_TIERS[target_tier]
+
+    if is_upgrade:
+        unlock_key = f"move_{target_tier.split('_rental')[0]}_rental"
+        if unlock_key not in available_products(state):
+            raise ValueError(f"{unlock_key} unlock requirements not met")
+        deposit = B.DEPOSIT_RENT_MULTIPLIER * cfg["rent"]
+        total_cost = B.MOVE_UPGRADE_FEE + deposit
+        if state.accounts.checking < total_cost:
+            raise ValueError("Not enough in checking to cover move-in cost.")
+        state.accounts.checking -= total_cost
+        prior_deposit = state.flags.get("house_deposit_paid", 0)
+        state.flags["house_deposit_paid"] = prior_deposit + deposit
+        _record_expense(state, f"Moving → {target_tier}", total_cost)
+        msg = (
+            f"Moved to {target_tier}: -{B.MOVE_UPGRADE_FEE/100:.0f} PLN fee, "
+            f"-{deposit/100:.0f} PLN deposit."
+        )
+    else:
+        if state.accounts.checking < B.MOVE_DOWNGRADE_FEE:
+            raise ValueError("Not enough in checking to cover moving fee.")
+        state.accounts.checking -= B.MOVE_DOWNGRADE_FEE
+        refund = state.flags.get("house_deposit_paid", 0)
+        if refund > 0:
+            state.accounts.checking += refund
+            state.flags["house_deposit_paid"] = 0
+        _record_expense(state, f"Moving → {target_tier}", B.MOVE_DOWNGRADE_FEE)
+        msg = (
+            f"Moved to {target_tier}: -{B.MOVE_DOWNGRADE_FEE/100:.0f} PLN fee"
+            + (f", +{refund/100:.0f} PLN deposit refund." if refund else ".")
+        )
+
+    state.house.tier = target_tier
+    state.house.monthly_rent = cfg["rent"]
+    state.house.shoddiness = cfg["shoddiness"]
+    state.house.durability = cfg["durability"]
+    state.house.distance_to_work_km = cfg["distance_to_work_km"]
+    return state, msg
+
+
 def take_bnpl(state: GameState, amount: int) -> tuple[GameState, str]:
     due_day = (state.day + B.BNPL_GRACE_DAYS - 1) % B.MONTH_LEN + 1
     state.loans.append(

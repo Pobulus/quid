@@ -50,6 +50,22 @@ const HOUSE_LABELS = {
   nice_rental:    "Nice rental",
 };
 
+// Mirror of balance.HOUSE_TIERS — used by the move modal to preview rent/stats
+// and compute move costs client-side. Keep in sync with src/game/balance.py.
+const HOUSE_TIERS = {
+  shoddy_rental: { rent: 180000, shoddiness: 6, durability: 4, distance_to_work_km: 12 },
+  decent_rental: { rent: 260000, shoddiness: 3, durability: 6, distance_to_work_km: 6 },
+  nice_rental:   { rent: 380000, shoddiness: 1, durability: 8, distance_to_work_km: 3 },
+};
+const HOUSE_TIER_ORDER = ["shoddy_rental", "decent_rental", "nice_rental"];
+const MOVE_UPGRADE_FEE = 50000;
+const MOVE_DOWNGRADE_FEE = 30000;
+const DEPOSIT_RENT_MULTIPLIER = 2;
+const MOVE_UNLOCK_KEY = {
+  decent_rental: "move_decent_rental",
+  nice_rental:   "move_nice_rental",
+};
+
 const HOUSE_FLAVOR = {
   shoddy_rental:
     "Third floor walk-up. The hallway smells like wet paper. Pipes groan at 3 AM.",
@@ -144,6 +160,8 @@ function quid() {
     ccPayModalOpen: false,
     ccPayDraft: { amount_pln: 0 },
     ccPaySaving: false,
+    moveModalOpen: false,
+    moveSaving: false,
     loanModalOpen: false,
     loanDraft: { kind: "personal", amount_pln: 0 },
     loanSaving: false,
@@ -760,6 +778,68 @@ function quid() {
         this.showToast("Network error.");
       } finally {
         this.transferSaving = false;
+      }
+    },
+
+    // ---- house move (T3.21) ----
+
+    houseTierOrder() { return HOUSE_TIER_ORDER; },
+    moveTierInfo(tier) { return HOUSE_TIERS[tier]; },
+
+    openMoveModal() { this.moveModalOpen = true; },
+    closeMoveModal() { if (!this.moveSaving) this.moveModalOpen = false; },
+
+    moveIsUpgrade(tier) {
+      const order = HOUSE_TIER_ORDER;
+      return order.indexOf(tier) > order.indexOf(this.state.house.tier);
+    },
+
+    moveCostDescription(tier) {
+      if (tier === this.state.house.tier) return '<span class="dim">Current residence.</span>';
+      if (this.moveIsUpgrade(tier)) {
+        const unlockKey = MOVE_UNLOCK_KEY[tier];
+        const cfg = HOUSE_TIERS[tier];
+        const deposit = DEPOSIT_RENT_MULTIPLIER * cfg.rent;
+        const total = MOVE_UPGRADE_FEE + deposit;
+        const unlocked = this.productStatus(unlockKey) === "active";
+        const unlockHint = unlocked
+          ? ""
+          : ` <span class="text-[color:var(--danger)]">(${this.productRequirement(unlockKey)})</span>`;
+        return `Fee ${fmtMoney(MOVE_UPGRADE_FEE)} + deposit ${fmtMoney(deposit)} = <strong>${fmtMoney(total)}</strong>${unlockHint}`;
+      }
+      const refund = (this.state.flags && this.state.flags.house_deposit_paid) || 0;
+      const net = MOVE_DOWNGRADE_FEE - refund;
+      return refund > 0
+        ? `Fee ${fmtMoney(MOVE_DOWNGRADE_FEE)}, refund ${fmtMoney(refund)} = net <strong>${fmtMoney(net)}</strong>`
+        : `Fee <strong>${fmtMoney(MOVE_DOWNGRADE_FEE)}</strong>`;
+    },
+
+    async confirmMove(tier) {
+      if (this.moveSaving) return;
+      const upgrade = this.moveIsUpgrade(tier);
+      const prompt = upgrade
+        ? `Move up to ${HOUSE_LABELS[tier]}? This charges the fee + deposit.`
+        : `Move down to ${HOUSE_LABELS[tier]}? Deposit (if any) is refunded.`;
+      if (!confirm(prompt)) return;
+      this.moveSaving = true;
+      try {
+        const r = await fetch("/api/move-house", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: this.state, target_tier: tier }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.showToast(data.detail || `Error ${r.status} from /api/move-house.`);
+          return;
+        }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.moveModalOpen = false;
+        this.showToast(data.message || "Moved.");
+      } catch (_) {
+        this.showToast("Network error.");
+      } finally {
+        this.moveSaving = false;
       }
     },
 

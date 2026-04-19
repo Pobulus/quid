@@ -120,6 +120,14 @@ HOUSE_TIERS = {
     },
 }
 
+HOUSE_TIER_ORDER = ["shoddy_rental", "decent_rental", "nice_rental"]
+
+# Moving costs (T3.21). Upgrades cost a deposit (2× new-tier rent) + moving fee;
+# downgrades refund the prior deposit but charge a smaller moving fee.
+MOVE_UPGRADE_FEE = 50000     # 500 PLN
+MOVE_DOWNGRADE_FEE = 30000   # 300 PLN
+DEPOSIT_RENT_MULTIPLIER = 2  # deposit = 2× new-tier monthly rent
+
 # Heating: months 1, 11, 12 = 3x; months 2, 10 = 2x; months 5–9 = 0.5x; rest 1x.
 HEATING_BASE = 25000  # 250 PLN
 HEATING_MONTH_MULTIPLIER = {

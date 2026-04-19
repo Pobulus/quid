@@ -126,6 +126,17 @@ def apply_cc(request, payload: dict = Body(...)):
     return _out(state, message=msg)
 
 
+@api.post("/move-house")
+def move_house(request, payload: dict = Body(...)):
+    state = _load(payload)
+    target = payload.get("target_tier")
+    try:
+        state, msg = finance.move_house(state, target)
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    return _out(state, message=msg)
+
+
 @api.post("/cc-pay")
 def cc_pay(request, payload: dict = Body(...)):
     state = _load(payload)
