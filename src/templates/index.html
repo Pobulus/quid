@@ -577,6 +577,23 @@
             </div>
           </template>
 
+          <!-- ===== low-stat warning (T3.17) ===== -->
+          <template x-if="statWarning">
+            <div class="modal-overlay" @click.self="dismissStatWarning()">
+              <div class="modal-panel col g-8">
+                <span class="sub-h" style="color:#ff8800;">
+                  ⚠ <span x-text="statWarning.stat.toUpperCase()"></span> IS CRITICAL
+                </span>
+                <p class="text-xs dim">
+                  <span x-text="statWarning.stat"></span> dropped to
+                  <strong x-text="statWarning.value"></strong> / 100.
+                </p>
+                <p class="text-xs" x-text="statWarningFlavor(statWarning.stat)"></p>
+                <button class="btn-q mag mt-2" @click="dismissStatWarning()">Acknowledge</button>
+              </div>
+            </div>
+          </template>
+
           <!-- ===== game over ===== -->
           <template x-if="state.game_over">
             <div class="game-over-overlay">
@@ -604,7 +621,9 @@
               <img src="{% static 'img/app_bank.png' %}" class="dock-icon" alt="Bank" />
               <span class="pixel">BANK</span>
             </button>
-            <button class="dock-btn" :class="activeApp === 'health' ? 'active' : ''" @click="setApp('health')">
+            <button class="dock-btn" style="position:relative" :class="activeApp === 'health' ? 'active' : ''" @click="setApp('health')">
+              <span class="warn-dot" x-show="anyStatLow"
+                    style="position:absolute; top:2px; right:10px; width:7px; height:7px;"></span>
               <img src="{% static 'img/app_health.png' %}" class="dock-icon" alt="Health" />
               <span class="pixel">HEALTH</span>
             </button>
