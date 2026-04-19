@@ -179,6 +179,7 @@ function quid() {
     ccPaySaving: false,
     moveModalOpen: false,
     moveSaving: false,
+    moveConfirmTier: null,
     depositModalOpen: false,
     depositDraft: { amount_pln: 0, term_months: 3 },
     depositSaving: false,
@@ -268,6 +269,13 @@ function quid() {
 
     save() {
       if (this.state) localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    },
+
+    cheatMoney() {
+      if (!this.state) return;
+      this.state.accounts.checking += 100000;
+      this.save();
+      this.showToast("+1000 PLN (cheat).");
     },
 
     // ---- UI ----
@@ -989,13 +997,53 @@ function quid() {
     houseTierOrder() { return HOUSE_TIER_ORDER; },
     moveTierInfo(tier) { return HOUSE_TIERS[tier]; },
 
-    openMoveModal() { this.moveModalOpen = true; },
-    closeMoveModal() { if (!this.moveSaving) this.moveModalOpen = false; },
+    openMoveModal() { this.moveModalOpen = true; this.moveConfirmTier = null; },
+    closeMoveModal() {
+      if (this.moveSaving) return;
+      this.moveModalOpen = false;
+      this.moveConfirmTier = null;
+    },
+
+    requestMove(tier) {
+      if (this.moveSaving) return;
+      if (!this.canMoveTo(tier)) return;
+      this.moveConfirmTier = tier;
+    },
+    cancelMoveConfirm() { if (!this.moveSaving) this.moveConfirmTier = null; },
+
+    moveConfirmPrompt(tier) {
+      if (!tier) return "";
+      return this.moveIsUpgrade(tier)
+        ? `Move up to ${HOUSE_LABELS[tier]}? This charges the fee + deposit.`
+        : `Move down to ${HOUSE_LABELS[tier]}? Deposit (if any) is refunded.`;
+    },
 
     moveIsUpgrade(tier) {
       const order = HOUSE_TIER_ORDER;
       return order.indexOf(tier) > order.indexOf(this.state.house.tier);
     },
+
+    moveBlockReason(tier) {
+      if (tier === this.state.house.tier) return "Current residence.";
+      if (this.moveIsUpgrade(tier)) {
+        const unlockKey = MOVE_UNLOCK_KEY[tier];
+        if (this.productStatus(unlockKey) !== "active") {
+          return this.productRequirement(unlockKey);
+        }
+        const deposit = DEPOSIT_RENT_MULTIPLIER * HOUSE_TIERS[tier].rent;
+        const total = MOVE_UPGRADE_FEE + deposit;
+        if (this.state.accounts.checking < total) {
+          return `Need ${fmtMoney(total)} in checking.`;
+        }
+      } else {
+        if (this.state.accounts.checking < MOVE_DOWNGRADE_FEE) {
+          return `Need ${fmtMoney(MOVE_DOWNGRADE_FEE)} in checking.`;
+        }
+      }
+      return null;
+    },
+
+    canMoveTo(tier) { return this.moveBlockReason(tier) === null; },
 
     moveCostDescription(tier) {
       if (tier === this.state.house.tier) return '<span class="dim">Current residence.</span>';
@@ -1019,11 +1067,6 @@ function quid() {
 
     async confirmMove(tier) {
       if (this.moveSaving) return;
-      const upgrade = this.moveIsUpgrade(tier);
-      const prompt = upgrade
-        ? `Move up to ${HOUSE_LABELS[tier]}? This charges the fee + deposit.`
-        : `Move down to ${HOUSE_LABELS[tier]}? Deposit (if any) is refunded.`;
-      if (!confirm(prompt)) return;
       this.moveSaving = true;
       try {
         const r = await fetch("/api/move-house", {
@@ -1038,6 +1081,7 @@ function quid() {
         }
         if (data.state) { this.state = data.state; this.save(); }
         this.moveModalOpen = false;
+        this.moveConfirmTier = null;
         this.showToast(data.message || "Moved.");
       } catch (_) {
         this.showToast("Network error.");
