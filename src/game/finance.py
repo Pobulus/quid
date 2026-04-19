@@ -6,7 +6,7 @@ No I/O, no globals beyond `balance`. Money is always grosze (int).
 from __future__ import annotations
 
 from game import balance as B
-from game.state import CalendarEvent, CreditCard, GameState, Loan
+from game.state import CalendarEvent, CreditCard, Deposit, GameState, Loan
 
 
 def _clamp(v: int, lo: int, hi: int) -> int:
@@ -108,17 +108,25 @@ def apply_monthly_interest(state: GameState) -> tuple[GameState, list[str]]:
     """Applied at month rollover. Savings grows, loan balances grow, CC carried balance grows."""
     logs: list[str] = []
 
-    # Savings interest
+    # Savings interest — tier chosen explicitly via set_savings_tier (T3.22).
     if state.accounts.savings > 0:
         rate = (
             B.SAVINGS_PREMIUM_MONTHLY_RATE
-            if state.accounts.savings >= B.UNLOCK_TIERS["savings_premium"][1]
+            if state.accounts.savings_tier == "premium"
             else B.SAVINGS_BASIC_MONTHLY_RATE
         )
         gain = int(state.accounts.savings * rate)
         state.accounts.savings += gain
         if gain > 0:
             logs.append(f"Savings interest: +{gain/100:.2f} PLN")
+
+    # Fixed-term deposit accrues at a locked premium rate.
+    dep = state.accounts.deposit
+    if dep and dep.principal > 0:
+        dep_gain = int(dep.principal * B.DEPOSIT_MONTHLY_RATE)
+        dep.principal += dep_gain
+        if dep_gain > 0:
+            logs.append(f"Deposit interest: +{dep_gain/100:.2f} PLN")
 
     # Loan interest accrues on remaining
     for loan in state.loans:
@@ -288,6 +296,60 @@ def apply_for_credit_card(state: GameState, tier: str) -> tuple[GameState, str]:
             )
         )
     return state, f"Approved: {tier} credit card, limit {limit/100:.0f} PLN @ {apr*100:.0f}% APR"
+
+
+def set_savings_tier(state: GameState, tier: str) -> tuple[GameState, str]:
+    """Switch the savings account between basic and premium tiers."""
+    if tier not in B.SAVINGS_TIERS:
+        raise ValueError(f"unknown savings tier: {tier}")
+    if tier == "premium" and "savings_premium" not in available_products(state):
+        raise ValueError("savings_premium unlock requirements not met")
+    state.accounts.savings_tier = tier
+    return state, f"Savings tier set to {tier}."
+
+
+def open_deposit(
+    state: GameState, amount: int, term_months: int
+) -> tuple[GameState, str]:
+    """Open a fixed-term deposit. Moves `amount` grosze from savings into
+    `accounts.deposit` and stamps the current month."""
+    if "deposit" not in available_products(state):
+        raise ValueError("deposit unlock requirements not met")
+    if state.accounts.deposit is not None:
+        raise ValueError("A deposit is already open.")
+    if term_months not in B.DEPOSIT_TERMS:
+        raise ValueError(f"term_months must be one of {B.DEPOSIT_TERMS}")
+    if not isinstance(amount, int) or amount <= 0:
+        raise ValueError("Amount must be a positive integer (grosze).")
+    if amount > state.accounts.savings:
+        raise ValueError("Not enough in savings to open this deposit.")
+    state.accounts.savings -= amount
+    state.accounts.deposit = Deposit(
+        principal=amount, opened_month=state.month, term_months=term_months
+    )
+    return state, f"Deposit opened: {amount/100:.2f} PLN for {term_months} months."
+
+
+def close_deposit(state: GameState) -> tuple[GameState, str]:
+    """Close the deposit and release principal + accrued interest to savings.
+    If closed before term, a percentage of the current principal is forfeited."""
+    dep = state.accounts.deposit
+    if dep is None:
+        raise ValueError("No deposit is open.")
+    months_elapsed = state.month - dep.opened_month
+    if months_elapsed < dep.term_months:
+        penalty = int(dep.principal * B.DEPOSIT_EARLY_PENALTY_PCT)
+        payout = dep.principal - penalty
+        state.accounts.savings += payout
+        state.accounts.deposit = None
+        return state, (
+            f"Deposit closed early: -{penalty/100:.2f} PLN penalty, "
+            f"+{payout/100:.2f} PLN to savings."
+        )
+    payout = dep.principal
+    state.accounts.savings += payout
+    state.accounts.deposit = None
+    return state, f"Deposit matured: +{payout/100:.2f} PLN to savings."
 
 
 def move_house(state: GameState, target_tier: str) -> tuple[GameState, str]:

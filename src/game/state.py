@@ -35,10 +35,19 @@ class SavingsGoal:
 
 
 @dataclass
+class Deposit:
+    principal: int
+    opened_month: int
+    term_months: int
+
+
+@dataclass
 class Accounts:
     checking: int
     savings: int
     savings_goal: Optional[SavingsGoal] = None
+    savings_tier: Literal["basic", "premium"] = "basic"
+    deposit: Optional[Deposit] = None
 
 
 @dataclass
@@ -141,10 +150,13 @@ class GameState:
 
         accounts_raw = data["accounts"]
         sg_raw = accounts_raw.get("savings_goal")
+        dep_raw = accounts_raw.get("deposit")
         accounts = Accounts(
             checking=accounts_raw["checking"],
             savings=accounts_raw["savings"],
             savings_goal=SavingsGoal(**sg_raw) if sg_raw else None,
+            savings_tier=accounts_raw.get("savings_tier", "basic"),
+            deposit=Deposit(**dep_raw) if dep_raw else None,
         )
 
         cc_raw = data.get("credit_card")

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "seed": 1234567,
   "day": 12,
   "month": 2,
@@ -16,7 +16,9 @@
   "accounts": {
     "checking": 180000,
     "savings": 45000,
-    "savings_goal": { "name": "Emergency fund", "target": 300000 }
+    "savings_goal": { "name": "Emergency fund", "target": 300000 },
+    "savings_tier": "basic",
+    "deposit": null
   },
   "credit_card": {
     "limit": 100000,

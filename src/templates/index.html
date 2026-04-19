@@ -168,6 +168,48 @@
                   <button class="btn-q muted" style="flex:1" @click="openTransferModal()">Transfer</button>
                   <button class="btn-q muted" style="flex:1" @click="openBudgetModal()">Set budget</button>
                 </div>
+
+                <div class="row mt-1 text-xs" style="gap:6px">
+                  <span class="dim" style="flex:1">Savings tier</span>
+                  <button class="btn-q"
+                          :class="state.accounts.savings_tier !== 'premium' ? 'mag' : 'muted'"
+                          @click="setSavingsTier('basic')">Basic</button>
+                  <button class="btn-q"
+                          :class="state.accounts.savings_tier === 'premium' ? 'mag' : 'muted'"
+                          :disabled="!isUnlocked('savings_premium')"
+                          @click="setSavingsTier('premium')">Premium</button>
+                </div>
+              </div>
+
+              <!-- Fixed-term deposit -->
+              <div class="card col g-6" x-show="isUnlocked('deposit') || state.accounts.deposit">
+                <div class="row">
+                  <span class="sub-h">Fixed-term deposit</span>
+                  <span class="pill neon" x-text="'+ ' + (DEPOSIT_MONTHLY_RATE_PCT) + '%/mo'"></span>
+                </div>
+                <template x-if="state.accounts.deposit">
+                  <div class="col g-4">
+                    <div class="row text-sm">
+                      <span class="dim">Principal</span>
+                      <span class="neon" x-text="money(state.accounts.deposit.principal)"></span>
+                    </div>
+                    <div class="row text-xs dim">
+                      <span x-text="'Opened month ' + state.accounts.deposit.opened_month"></span>
+                      <span x-text="'Term ' + state.accounts.deposit.term_months + ' mo'"></span>
+                    </div>
+                    <button class="btn-q warn" @click="closeDeposit()">Close deposit</button>
+                  </div>
+                </template>
+                <template x-if="!state.accounts.deposit">
+                  <div class="col g-4">
+                    <p class="text-xs dim">Lock savings for a fixed term at a higher rate. Closing early forfeits a small percentage.</p>
+                    <button class="btn-q mag"
+                            :disabled="!isUnlocked('deposit') || savings <= 0"
+                            @click="openDepositModal()">
+                      Open deposit…
+                    </button>
+                  </div>
+                </template>
               </div>
 
               <!-- Credit card -->
@@ -633,6 +675,51 @@
 
                 <button class="btn-q mag" :disabled="ccPaySaving" @click="saveCcPay()">
                   <span x-text="ccPaySaving ? 'Paying…' : 'Pay'"></span>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="depositModalOpen">
+            <div class="modal-overlay" @click.self="closeDepositModal()">
+              <div class="modal-panel col g-8">
+                <div class="row">
+                  <span class="sub-h">Open deposit</span>
+                  <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          @click="closeDepositModal()">Close</button>
+                </div>
+
+                <div class="col g-4">
+                  <div class="row text-xs">
+                    <span class="dim">Savings</span>
+                    <span x-text="money(savings)"></span>
+                  </div>
+                  <div class="row text-xs">
+                    <span class="dim">Monthly rate</span>
+                    <span x-text="DEPOSIT_MONTHLY_RATE_PCT + '%'"></span>
+                  </div>
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim">Amount (PLN)</span>
+                  <input type="number" min="0" step="0.01" class="budget-input"
+                         x-model.number="depositDraft.amount_pln" />
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim">Term</span>
+                  <div class="row" style="gap:6px">
+                    <template x-for="t in DEPOSIT_TERMS" :key="t">
+                      <button class="btn-q" style="flex:1"
+                              :class="depositDraft.term_months === t ? 'mag' : 'muted'"
+                              @click="depositDraft.term_months = t"
+                              x-text="t + ' mo'"></button>
+                    </template>
+                  </div>
+                </div>
+
+                <button class="btn-q mag" :disabled="depositSaving" @click="saveDeposit()">
+                  <span x-text="depositSaving ? 'Opening…' : 'Open deposit'"></span>
                 </button>
               </div>
             </div>

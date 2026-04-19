@@ -5,7 +5,7 @@ Money is in grosze (1 PLN = 100 grosze).
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Demo mode: fixed seed so the opening run is deterministic for judges.
 DEMO_SEED = 13370420
@@ -166,6 +166,9 @@ CREDIT_SCORE_MAX = 850
 SAVINGS_BASIC_MONTHLY_RATE = 0.001    # ~1.2% APR
 SAVINGS_PREMIUM_MONTHLY_RATE = 0.004  # ~5% APR
 DEPOSIT_MONTHLY_RATE = 0.006          # ~7.4% APR (locked)
+DEPOSIT_TERMS = (3, 6, 12)            # allowed term lengths in months
+DEPOSIT_EARLY_PENALTY_PCT = 0.02      # 2% of principal forfeited on early close
+SAVINGS_TIERS = ("basic", "premium")
 
 # ---- Unlock tiers ---------------------------------------------------------------
 # Each entry: (min_credit_score | None, min_net_worth_grosze | None)

@@ -785,3 +785,129 @@ class EventsTest(TestCase):
         s, _ = events.advance_day(s)
         self.assertEqual(s.player.stats["sanity"], 40)
         self.assertEqual(s.player.stats["energy"], 30)
+
+
+class SavingsTierAndDepositTest(TestCase):
+    """T3.22 — Premium savings switch + fixed-term deposit."""
+
+    def _fresh(self):
+        s = new_game(seed=1)
+        s.accounts.savings = 600000  # 6000 PLN, > savings_premium nw threshold
+        return s
+
+    # set_savings_tier --------------------------------------------------------
+
+    def test_set_savings_tier_basic_always_allowed(self):
+        s = new_game(seed=1)
+        s.accounts.savings_tier = "premium"
+        s.accounts.savings = 600000
+        s, _ = finance.set_savings_tier(s, "basic")
+        self.assertEqual(s.accounts.savings_tier, "basic")
+
+    def test_set_savings_tier_premium_gated_by_unlock(self):
+        s = new_game(seed=1)  # starts with 0 net worth → locked
+        with self.assertRaises(ValueError):
+            finance.set_savings_tier(s, "premium")
+
+    def test_set_savings_tier_premium_allowed_when_unlocked(self):
+        s = self._fresh()
+        s, _ = finance.set_savings_tier(s, "premium")
+        self.assertEqual(s.accounts.savings_tier, "premium")
+
+    def test_set_savings_tier_rejects_unknown(self):
+        s = self._fresh()
+        with self.assertRaises(ValueError):
+            finance.set_savings_tier(s, "platinum")
+
+    # open_deposit ------------------------------------------------------------
+
+    def test_open_deposit_success(self):
+        s = self._fresh()
+        s.accounts.savings = 10**7  # net worth > deposit threshold
+        s, msg = finance.open_deposit(s, 500000, 6)
+        self.assertIsNotNone(s.accounts.deposit)
+        self.assertEqual(s.accounts.deposit.principal, 500000)
+        self.assertEqual(s.accounts.deposit.term_months, 6)
+        self.assertEqual(s.accounts.savings, 10**7 - 500000)
+
+    def test_open_deposit_insufficient_savings(self):
+        s = self._fresh()
+        s.accounts.savings = 10**7
+        with self.assertRaises(ValueError):
+            finance.open_deposit(s, 10**8, 6)
+
+    def test_open_deposit_already_open_rejected(self):
+        s = self._fresh()
+        s.accounts.savings = 10**7
+        s, _ = finance.open_deposit(s, 500000, 6)
+        with self.assertRaises(ValueError):
+            finance.open_deposit(s, 100000, 3)
+
+    def test_open_deposit_unlock_not_met(self):
+        s = new_game(seed=1)  # net worth too low
+        s.accounts.savings = 500000
+        with self.assertRaises(ValueError):
+            finance.open_deposit(s, 100000, 3)
+
+    def test_open_deposit_bad_term(self):
+        s = self._fresh()
+        s.accounts.savings = 10**7
+        with self.assertRaises(ValueError):
+            finance.open_deposit(s, 100000, 5)
+
+    # close_deposit -----------------------------------------------------------
+
+    def test_close_deposit_at_term_full_payout(self):
+        s = self._fresh()
+        s.accounts.savings = 10**7
+        s, _ = finance.open_deposit(s, 500000, 3)
+        principal = s.accounts.deposit.principal
+        s.month += 3  # reached term
+        saved = s.accounts.savings
+        s, _ = finance.close_deposit(s)
+        self.assertIsNone(s.accounts.deposit)
+        self.assertEqual(s.accounts.savings, saved + principal)
+
+    def test_close_deposit_early_applies_penalty(self):
+        s = self._fresh()
+        s.accounts.savings = 10**7
+        s, _ = finance.open_deposit(s, 500000, 6)
+        principal = s.accounts.deposit.principal
+        s.month += 1
+        saved = s.accounts.savings
+        s, msg = finance.close_deposit(s)
+        penalty = int(principal * B.DEPOSIT_EARLY_PENALTY_PCT)
+        self.assertEqual(s.accounts.savings, saved + principal - penalty)
+        self.assertIn("penalty", msg)
+
+    def test_close_deposit_when_none_open_raises(self):
+        s = self._fresh()
+        with self.assertRaises(ValueError):
+            finance.close_deposit(s)
+
+    # apply_monthly_interest --------------------------------------------------
+
+    def test_monthly_interest_honors_explicit_tier(self):
+        s = new_game(seed=1)
+        s.accounts.savings = 100000
+        s.accounts.savings_tier = "premium"
+        s, _ = finance.apply_monthly_interest(s)
+        expected_gain = int(100000 * B.SAVINGS_PREMIUM_MONTHLY_RATE)
+        self.assertEqual(s.accounts.savings, 100000 + expected_gain)
+
+    def test_monthly_interest_basic_tier_uses_basic_rate(self):
+        s = new_game(seed=1)
+        s.accounts.savings = 100000
+        s.accounts.savings_tier = "basic"
+        s, _ = finance.apply_monthly_interest(s)
+        expected_gain = int(100000 * B.SAVINGS_BASIC_MONTHLY_RATE)
+        self.assertEqual(s.accounts.savings, 100000 + expected_gain)
+
+    def test_monthly_interest_accrues_on_deposit(self):
+        s = self._fresh()
+        s.accounts.savings = 10**7
+        s, _ = finance.open_deposit(s, 500000, 6)
+        principal = s.accounts.deposit.principal
+        s, _ = finance.apply_monthly_interest(s)
+        expected_gain = int(principal * B.DEPOSIT_MONTHLY_RATE)
+        self.assertEqual(s.accounts.deposit.principal, principal + expected_gain)
