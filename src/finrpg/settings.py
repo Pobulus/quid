@@ -21,6 +21,7 @@ ALLOWED_HOSTS = ["*"] if DEBUG else os.environ.get("DJANGO_ALLOWED_HOSTS", "").s
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "").strip() or "http://localhost:11434"
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "").strip() or "gemma3:4b"
+OLLAMA_TIMEOUT_S = int(os.environ.get("OLLAMA_TIMEOUT_S", "").strip() or 120)
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",

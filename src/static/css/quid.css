@@ -821,6 +821,8 @@ input[type="radio"]:focus {
   bottom: 12px;
   left: 12px;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
   font-size: 11px;
   opacity: 0.6;
@@ -840,6 +842,67 @@ input[type="radio"]:focus {
 }
 
 .dev-bar button:hover { color: var(--neon); }
+
+/* ---- SAGE thinking spinner ---- */
+
+.sage-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(5, 0, 10, 0.72);
+  backdrop-filter: blur(2px);
+  pointer-events: auto;
+  border-radius: 28px;
+}
+
+.sage-mascot-wrap {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sage-mascot {
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px var(--neon)) drop-shadow(0 0 14px rgba(255, 0, 128, 0.4));
+  animation: sageBob 1.6s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes sageBob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+.sage-spinner {
+  position: absolute;
+  inset: 0;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border-width: 3px;
+  border-style: solid;
+  border-color: rgba(0, 255, 195, 0.15);
+  border-top-color: var(--neon);
+  border-right-color: var(--magenta);
+  box-shadow: 0 0 12px rgba(0, 255, 195, 0.35), 0 0 20px rgba(255, 0, 128, 0.25);
+  animation: sageSpin 1.2s linear infinite;
+  box-sizing: border-box;
+}
+
+@keyframes sageSpin {
+  to { transform: rotate(360deg); }
+}
 
 /* ---- Toast ---- */
 
