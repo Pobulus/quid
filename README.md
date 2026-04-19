@@ -2,6 +2,8 @@
 
 A deliberately unforgiving financial-literacy RPG. Browser game; Django serves the shell and proxies LLM calls; all gameplay state lives in the browser's `localStorage`.
 
+Built by **Jakub Białkowski-Brożek**, **Paweł Chmielewski**, and **Mykyta Shemechko**.
+
 See `docs/Hackathon_project.md` for the design spec and `agent/TASKS.md` for the build plan.
 
 ## Setup (first time)
