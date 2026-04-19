@@ -285,6 +285,15 @@ body {
   flex-shrink: 0;
 }
 
+.warn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff8800;
+  box-shadow: 0 0 8px #ff8800;
+  flex-shrink: 0;
+}
+
 .option-card {
   background: var(--panel-2);
   border: 1px solid var(--line);

@@ -7,6 +7,18 @@ const SCHEMA_VERSION = 1;
 const STORAGE_KEY = "quid.state.v1";
 const PREFETCH_TARGET = 3;  // keep at least this many pre-generated events buffered
 
+// Low-stat warning thresholds. Crossing `LOW` downward fires a one-shot modal;
+// climbing back above `CLEAR` re-arms the warning for that stat (hysteresis).
+const STAT_WARN_LOW = 40;
+const STAT_WARN_CLEAR = 50;
+const STAT_WARN_KEYS = ["health", "hunger", "sanity", "energy"];
+const STAT_WARN_FLAVOR = {
+  health: "Your body is giving out. Ignore this and you'll wind up in a hospital bed you can't afford.",
+  hunger: "You're running on empty. Another few days of scraps and you won't be standing.",
+  sanity: "The edges are fraying. Keep grinding without rest and you'll break.",
+  energy: "You're exhausted. Push harder and your body will decide for you.",
+};
+
 // Mirror of balance.UNLOCK_TIERS — [min_credit_score|null, min_net_worth_grosze|null].
 // Keep in sync if balance.py changes; Phase 2 may replace with a server call.
 const UNLOCK_TIERS = {
@@ -138,6 +150,7 @@ function quid() {
     openedFromAdvance: false, // true when event was opened via advanceUntilEvent → close returns to Home
     lastResolution: null,     // { option_id, rolled, dc, passed, effects }
     rollingEventId: null,     // while animating
+    statWarning: null,        // { stat, value } — one-shot low-stat modal
     transferModalOpen: false,
     transferDraft: { direction: "to_savings", amount_pln: 0 },
     transferSaving: false,
@@ -424,6 +437,9 @@ function quid() {
     // ---- actions (endpoint calls, graceful on 404) ----
 
     async postAction(path, payload = {}) {
+      const beforeStats = this.state?.player?.stats
+        ? { ...this.state.player.stats }
+        : null;
       try {
         const r = await fetch(path, {
           method: "POST",
@@ -438,6 +454,7 @@ function quid() {
         const data = await r.json();
         if (data.state) {
           this.state = data.state;
+          this.checkStatThresholds(beforeStats);
           this.save();
         }
         return data;
@@ -445,6 +462,46 @@ function quid() {
         this.showToast("Network error.");
         return null;
       }
+    },
+
+    // T3.17 — orange "critical stat" dot + one-shot warning modal.
+    // Hysteresis: crossing `STAT_WARN_LOW` downward fires once; climbing back
+    // above `STAT_WARN_CLEAR` re-arms so the next dip warns again.
+    checkStatThresholds(beforeStats) {
+      if (!this.state || !beforeStats) return;
+      const afterStats = this.state.player?.stats;
+      if (!afterStats) return;
+      if (!this.state.flags) this.state.flags = {};
+      const shown = this.state.flags.stat_warnings_shown || {};
+      let newWarning = null;
+      for (const key of STAT_WARN_KEYS) {
+        const before = beforeStats[key];
+        const after = afterStats[key];
+        if (after === undefined) continue;
+        if (after >= STAT_WARN_CLEAR && shown[key]) {
+          delete shown[key];
+        }
+        if (before >= STAT_WARN_LOW && after < STAT_WARN_LOW && !shown[key]) {
+          shown[key] = true;
+          if (!newWarning || after < newWarning.value) {
+            newWarning = { stat: key, value: after };
+          }
+        }
+      }
+      this.state.flags.stat_warnings_shown = shown;
+      if (newWarning && !this.statWarning) {
+        this.statWarning = newWarning;
+      }
+    },
+
+    dismissStatWarning() { this.statWarning = null; },
+
+    statWarningFlavor(stat) { return STAT_WARN_FLAVOR[stat] || ""; },
+
+    get anyStatLow() {
+      const s = this.state?.player?.stats;
+      if (!s) return false;
+      return STAT_WARN_KEYS.some((k) => s[k] !== undefined && s[k] < STAT_WARN_LOW);
     },
 
     // Keep the local event queue topped up. Fires one background LLM call
