@@ -374,7 +374,8 @@ def advance_until_event(
             return state, logs, "game_over", None
         if state.month != start_month:
             return state, logs, "month_rollover", None
-        if day_logs:
+        notable = [l for l in day_logs if not l.startswith("Slept —")]
+        if notable:
             return state, logs, "calendar_event", None
         # Quiet day — roll SAGE probability gate.
         if rng.random() < sage.event_probability(state):
