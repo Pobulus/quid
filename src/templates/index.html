@@ -678,24 +678,50 @@
                           @click="closeMoveModal()">Close</button>
                 </div>
 
-                <template x-for="tier in houseTierOrder()" :key="tier">
-                  <div class="option-card col g-4"
-                       :class="tier === state.house.tier ? 'disabled' : ''"
-                       @click="tier !== state.house.tier && confirmMove(tier)">
-                    <div class="row">
-                      <span class="sub-h" x-text="houseName(tier)"></span>
-                      <span class="pill dim" x-text="'Rent ' + moneyBig(moveTierInfo(tier).rent)"></span>
-                    </div>
-                    <div class="row text-xs dim">
-                      <span x-text="'Shoddiness ' + moveTierInfo(tier).shoddiness + '/10'"></span>
-                      <span x-text="'Durability ' + moveTierInfo(tier).durability + '/10'"></span>
-                      <span x-text="moveTierInfo(tier).distance_to_work_km + ' km'"></span>
-                    </div>
-                    <div class="text-xs" x-html="moveCostDescription(tier)"></div>
+                <template x-if="!moveConfirmTier">
+                  <div class="col g-8">
+                    <template x-for="tier in houseTierOrder()" :key="tier">
+                      <div class="option-card col g-4"
+                           :class="canMoveTo(tier) ? '' : 'disabled'"
+                           @click="requestMove(tier)">
+                        <div class="row">
+                          <span class="sub-h" x-text="houseName(tier)"></span>
+                          <span class="pill dim" x-text="'Rent ' + moneyBig(moveTierInfo(tier).rent)"></span>
+                        </div>
+                        <div class="row text-xs dim">
+                          <span x-text="'Shoddiness ' + moveTierInfo(tier).shoddiness + '/10'"></span>
+                          <span x-text="'Durability ' + moveTierInfo(tier).durability + '/10'"></span>
+                          <span x-text="moveTierInfo(tier).distance_to_work_km + ' km'"></span>
+                        </div>
+                        <div class="text-xs" x-html="moveCostDescription(tier)"></div>
+                        <template x-if="!canMoveTo(tier) && tier !== state.house.tier">
+                          <div class="text-xs" style="color: var(--danger)" x-text="moveBlockReason(tier)"></div>
+                        </template>
+                      </div>
+                    </template>
+                    <p class="text-xs dim">Upgrades require unlock + deposit; downgrades refund the prior deposit.</p>
                   </div>
                 </template>
 
-                <p class="text-xs dim">Upgrades require unlock + deposit; downgrades refund the prior deposit.</p>
+                <template x-if="moveConfirmTier">
+                  <div class="col g-8">
+                    <div class="option-card col g-4">
+                      <span class="sub-h" x-text="houseName(moveConfirmTier)"></span>
+                      <div class="text-xs" x-html="moveCostDescription(moveConfirmTier)"></div>
+                    </div>
+                    <p class="text-xs" x-text="moveConfirmPrompt(moveConfirmTier)"></p>
+                    <div class="row g-8">
+                      <button class="btn-q muted" style="flex: 1;"
+                              :disabled="moveSaving"
+                              @click="cancelMoveConfirm()">Cancel</button>
+                      <button class="btn-q" style="flex: 1;"
+                              :disabled="moveSaving"
+                              @click="confirmMove(moveConfirmTier)">
+                        <span x-text="moveSaving ? 'Moving…' : 'Confirm'"></span>
+                      </button>
+                    </div>
+                  </div>
+                </template>
               </div>
             </div>
           </template>
@@ -927,6 +953,7 @@
     <button @click="newGame(true)">new game</button>
     <button @click="newDemoGame()">demo</button>
     <button @click="loadFakeState()">load fake</button>
+    <button @click="cheatMoney()" x-show="state">+1000 PLN</button>
     <button @click="exportSave()" x-show="state">export</button>
     <button @click="triggerImport()">import</button>
     <input type="file" x-ref="importFile" @change="importSave($event)" accept="application/json,.json" style="display:none" />

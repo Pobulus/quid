@@ -15,6 +15,27 @@
   --warn: #ffa730;
 }
 
+/* DaisyUI "quid" theme — override the default palette so any daisy-themed
+   components (btn, badge, bg-primary, etc.) pick up our cyberpunk colors. */
+[data-theme="quid"] {
+  --p: 163 100% 50%;    /* primary   — neon */
+  --pc: 240 30% 6%;     /* primary content */
+  --s: 329 100% 50%;    /* secondary — magenta */
+  --sc: 240 30% 6%;
+  --a: 48 100% 50%;     /* accent    — gold */
+  --ac: 240 30% 6%;
+  --n: 240 30% 12%;     /* neutral */
+  --nc: 240 10% 85%;
+  --b1: 240 30% 6%;     /* base-100  — base */
+  --b2: 240 25% 10%;
+  --b3: 240 20% 14%;
+  --bc: 240 10% 85%;    /* base content */
+  --in: 195 90% 55%;    /* info */
+  --su: 163 100% 50%;   /* success */
+  --wa: 35 100% 58%;    /* warning */
+  --er: 348 100% 65%;   /* error */
+}
+
 body {
   background: radial-gradient(circle at 20% -10%, #1a0a2a 0%, var(--base) 55%) no-repeat;
   color: var(--fg);
@@ -43,6 +64,24 @@ body {
     0 30px 80px rgba(0, 255, 195, 0.08),
     0 10px 30px rgba(255, 0, 128, 0.08);
   position: relative;
+  animation: crtFlicker 5.2s infinite steps(1, end);
+}
+
+/* Subtle CRT flicker — tiny, irregular dips in brightness. */
+@keyframes crtFlicker {
+  0%, 100%  { filter: brightness(1.00); }
+  12%       { filter: brightness(0.97); }
+  13%       { filter: brightness(1.01); }
+  40%       { filter: brightness(1.00); }
+  41%       { filter: brightness(0.95); }
+  42%       { filter: brightness(1.00); }
+  78%       { filter: brightness(0.98); }
+  79%       { filter: brightness(1.02); }
+  80%       { filter: brightness(1.00); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone { animation: none; }
 }
 
 .phone::before {
