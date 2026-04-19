@@ -21,6 +21,21 @@
 
 <body class="flex items-center justify-center md:p-6" x-data="quid" x-init="boot()">
 
+  <audio id="bgm" src="{% static 'quid-theme.mp3' %}" loop preload="auto"></audio>
+  <script>
+    (function () {
+      const bgm = document.getElementById('bgm');
+      bgm.volume = 0.4;
+      const start = () => {
+        bgm.play().catch(() => {});
+        window.removeEventListener('pointerdown', start);
+        window.removeEventListener('keydown', start);
+      };
+      window.addEventListener('pointerdown', start);
+      window.addEventListener('keydown', start);
+    })();
+  </script>
+
   <div class="phone">
     <div class="screen">
 
