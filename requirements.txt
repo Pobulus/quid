@@ -1,0 +1,5 @@
+Django==5.2.13
+django-ninja==1.6.2
+python-dotenv==1.2.2
+requests==2.33.1
+httpx==0.28.1
