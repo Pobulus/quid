@@ -96,6 +96,7 @@ class EventRef:
     received_month: int
     status: Literal["unread", "resolved"]
     event: dict                        # full SAGE event payload
+    resolution: Optional[dict] = None  # set by client after resolve/ignore; opaque to server
 
 
 @dataclass

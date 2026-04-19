@@ -187,6 +187,9 @@ function quid() {
     loanModalOpen: false,
     loanDraft: { kind: "personal", amount_pln: 0 },
     loanSaving: false,
+    ccApplyModalOpen: false,
+    ccApplyTier: "starter",
+    ccApplySaving: false,
     budgetModalOpen: false,
     budgetModalRequired: false,   // true when server gated on budget_required — modal can't be dismissed
     budgetDraft: { food_tier: FOOD_DEFAULT_TIER, leisure: 0, bills_buffer: 0 },
@@ -195,6 +198,9 @@ function quid() {
     dayPulseTimer: null,
     dayAdvanceAnim: null,     // { from: {day,month,dow}, to: {day,month,dow} } while popup is up
     dayAdvanceTimer: null,
+    skillLevelUp: null,       // { skill, from, to } while level-up popup is up
+    skillLevelUpTimer: null,
+    unresolvedNudge: null,    // [{ event, option }] when blocking sleep on unanswered mail
     prefetching: false,       // guard: only one /api/sage/prefetch in flight at a time
 
     statList: ["health","hunger","sanity","energy"].map(k => ({ key: k, icon: STAT_ICONS[k] })),
@@ -422,20 +428,38 @@ function quid() {
     },
 
     onProductClick(key) {
-      if (key === "cc_starter")    return this.applyForCreditCard("starter");
-      if (key === "cc_better")     return this.applyForCreditCard("better");
+      if (key === "cc_starter")    return this.openCcApplyModal("starter");
+      if (key === "cc_better")     return this.openCcApplyModal("better");
       if (key === "personal_loan") return this.openLoanModal("personal");
       if (key === "bnpl")          return this.openLoanModal("bnpl");
     },
 
-    async applyForCreditCard(tier) {
-      const label = tier === "starter" ? "starter credit card" : "premium credit card";
-      if (!confirm(`Apply for the ${label}?`)) return;
+    // ---- credit card apply modal ----
+
+    ccTierLabel(tier) {
+      return tier === "starter" ? "Starter credit card" : "Premium credit card";
+    },
+    ccTierLimit(tier) { return tier === "starter" ? 100000 : 500000; },
+    ccTierApr(tier)   { return tier === "starter" ? 0.34 : 0.18; },
+
+    openCcApplyModal(tier) {
+      this.ccApplyTier = tier;
+      this.ccApplyModalOpen = true;
+    },
+
+    closeCcApplyModal() {
+      if (this.ccApplySaving) return;
+      this.ccApplyModalOpen = false;
+    },
+
+    async saveCcApply() {
+      if (this.ccApplySaving) return;
+      this.ccApplySaving = true;
       try {
         const r = await fetch("/api/apply-cc", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ state: this.state, tier }),
+          body: JSON.stringify({ state: this.state, tier: this.ccApplyTier }),
         });
         const data = await r.json().catch(() => ({}));
         if (!r.ok) {
@@ -443,9 +467,12 @@ function quid() {
           return;
         }
         if (data.state) { this.state = data.state; this.save(); }
+        this.ccApplyModalOpen = false;
         this.showToast(data.message || "Credit card approved.");
       } catch (_) {
         this.showToast("Network error.");
+      } finally {
+        this.ccApplySaving = false;
       }
     },
 
@@ -593,7 +620,45 @@ function quid() {
       this.dayAdvanceTimer = setTimeout(() => { this.dayAdvanceAnim = null; }, 1800);
     },
 
+    unresolvedEvents() {
+      if (!this.state) return [];
+      return this.state.inbox.filter(
+        (e) => e.status !== "resolved" && Array.isArray(e.event?.options) && e.event.options.length > 0
+      );
+    },
+
+    pickFailureOption(ev) {
+      const opts = ev.event.options;
+      return opts[Math.floor(Math.random() * opts.length)];
+    },
+
+    applyEffectsLocal(effects) {
+      const STATS = ["health","hunger","sanity","energy"];
+      const SKILLS = ["cooking","handiwork","charisma","physique"];
+      const s = this.state;
+      for (const [k, v] of Object.entries(effects || {})) {
+        if (!Number.isFinite(v)) continue;
+        if (k === "money") {
+          s.accounts.checking = s.accounts.checking + v;
+        } else if (k === "credit_score") {
+          s.credit_score = Math.max(300, Math.min(850, s.credit_score + v));
+        } else if (STATS.includes(k)) {
+          s.player.stats[k] = Math.max(0, Math.min(100, s.player.stats[k] + v));
+        } else if (SKILLS.includes(k)) {
+          s.player.skills[k] = Math.max(0, Math.min(10, s.player.skills[k] + v));
+        }
+      }
+    },
+
     async advanceDay() {
+      const pending = this.unresolvedEvents();
+      if (pending.length > 0 && !this.unresolvedNudge) {
+        this.unresolvedNudge = pending.map((ev) => ({
+          event: ev,
+          option: this.pickFailureOption(ev),
+        }));
+        return;
+      }
       const before = this.dateSnapshot();
       const data = await this.postAction("/api/advance-day");
       if (data && data.reason === "budget_required") {
@@ -601,6 +666,44 @@ function quid() {
         return;
       }
       this.triggerDayAdvanceAnim(before);
+    },
+
+    dismissUnresolvedNudge() {
+      this.unresolvedNudge = null;
+    },
+
+    goToInboxFromNudge() {
+      this.unresolvedNudge = null;
+      this.activeApp = "email";
+      this.openEventId = null;
+      this.lastResolution = null;
+    },
+
+    async sleepAnyway() {
+      if (!this.unresolvedNudge) return;
+      const before = { ...this.state.player.stats };
+      for (const { event: ev, option } of this.unresolvedNudge) {
+        const effects = option.effects_on_failure || {};
+        this.applyEffectsLocal(effects);
+        ev.status = "resolved";
+        ev.resolution = {
+          option_id: option.id,
+          rolled: 0,
+          dc: option.skill_check?.difficulty_class ?? 0,
+          skill: option.skill_check?.skill ?? null,
+          skillValue: 0,
+          total: 0,
+          passed: false,
+          effects,
+          local: true,
+          ignored: true,
+        };
+      }
+      this.unresolvedNudge = null;
+      this.checkStatThresholds(before);
+      this.save();
+      this.showToast("You ignored your mail. It cost you.");
+      await this.advanceDay();
     },
     async advanceUntilEvent() {
       const before = this.dateSnapshot();
@@ -642,7 +745,18 @@ function quid() {
       }
     },
     async rest()              { await this.postAction("/api/rest"); },
-    async practiceSkill(skill){ await this.postAction("/api/practice-skill", { skill }); },
+    async practiceSkill(skill){
+      const before = this.state?.player?.skills?.[skill] ?? 0;
+      await this.postAction("/api/practice-skill", { skill });
+      const after = this.state?.player?.skills?.[skill] ?? 0;
+      if (after > before) this.showSkillLevelUp(skill, before, after);
+    },
+
+    showSkillLevelUp(skill, from, to) {
+      clearTimeout(this.skillLevelUpTimer);
+      this.skillLevelUp = { skill, from, to };
+      this.skillLevelUpTimer = setTimeout(() => { this.skillLevelUp = null; }, 1800);
+    },
 
     async resolveOption(option) {
       const ev = this.openEvent;

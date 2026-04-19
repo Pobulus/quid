@@ -559,6 +559,95 @@ body {
   box-shadow: 0 0 12px rgba(255, 0, 128, 0.7);
 }
 
+/* ---- Skill level up ---- */
+
+.lvlup-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 26;
+  overflow: hidden;
+  pointer-events: auto;
+  border-radius: 28px;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 200, 0, 0.22) 0%, rgba(5, 0, 10, 0.92) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: daFadeOut 1.8s ease forwards;
+}
+
+.lvlup-stripe {
+  position: absolute;
+  left: -40%;
+  width: 200%;
+  height: 70px;
+  background: linear-gradient(90deg, transparent, var(--gold), var(--neon), transparent);
+  opacity: 0.75;
+  mix-blend-mode: screen;
+  filter: blur(1px);
+}
+
+.lvlup-stripe-1 {
+  top: 32%;
+  transform: rotate(-10deg);
+  animation: daSwipe 0.7s cubic-bezier(0.3, 0, 0.2, 1) forwards;
+}
+
+.lvlup-stripe-2 {
+  top: 54%;
+  transform: rotate(-10deg);
+  animation: daSwipe 0.7s 0.08s cubic-bezier(0.3, 0, 0.2, 1) forwards;
+  opacity: 0.5;
+}
+
+.lvlup-content {
+  position: relative;
+  z-index: 2;
+  transform: rotate(-5deg);
+  text-align: center;
+  animation: daPop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+
+.lvlup-title {
+  font-size: 14px;
+  letter-spacing: 3px;
+  color: var(--gold);
+  text-shadow: 0 0 12px var(--gold), 0 0 22px var(--magenta);
+  margin-bottom: 14px;
+}
+
+.lvlup-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.lvlup-num {
+  font-size: 48px;
+  line-height: 1;
+  color: var(--neon);
+  text-shadow: 0 0 14px var(--neon);
+}
+
+.lvlup-num-new {
+  color: var(--gold);
+  text-shadow: 0 0 14px var(--gold), 0 0 28px var(--magenta);
+  animation: lvlupPulse 0.7s 0.25s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.lvlup-arrow {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px var(--magenta));
+}
+
+@keyframes lvlupPulse {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
 /* ---- Roll animation ---- */
 
 @keyframes rollPulse {

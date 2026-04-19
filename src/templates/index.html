@@ -344,7 +344,7 @@
                     </div>
                     <div class="row text-[10px] dim">
                       <span x-text="(state.player.skill_practice_counts[sk.key] || 0) + ' attempt(s) at this level'"></span>
-                      <button class="btn-q muted"
+                      <button class="btn-q"
                               style="padding: 4px 8px; font-size: 8px;"
                               :disabled="state.actions_today === 0"
                               @click="practiceSkill(sk.key)">
@@ -583,6 +583,42 @@
             </div>
           </template>
 
+          <!-- ===== CC apply modal ===== -->
+          <template x-if="ccApplyModalOpen">
+            <div class="modal-overlay" @click.self="closeCcApplyModal()">
+              <div class="modal-panel col g-8">
+                <div class="row">
+                  <span class="sub-h" x-text="'Apply · ' + ccTierLabel(ccApplyTier)"></span>
+                  <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          @click="closeCcApplyModal()">Close</button>
+                </div>
+
+                <div class="col g-4">
+                  <div class="row text-xs">
+                    <span class="dim">Credit limit</span>
+                    <span class="gold" x-text="moneyBig(ccTierLimit(ccApplyTier))"></span>
+                  </div>
+                  <div class="row text-xs">
+                    <span class="dim">APR</span>
+                    <span class="warn" x-text="Math.round(ccTierApr(ccApplyTier) * 100) + '%'"></span>
+                  </div>
+                  <div class="row text-xs">
+                    <span class="dim">Min payment</span>
+                    <span>5% / mo</span>
+                  </div>
+                </div>
+
+                <p class="text-xs dim">
+                  Missing the monthly minimum tanks your credit score and accrues interest at APR. Only one card at a time.
+                </p>
+
+                <button class="btn-q mag" :disabled="ccApplySaving" @click="saveCcApply()">
+                  <span x-text="ccApplySaving ? 'Applying…' : 'Apply'"></span>
+                </button>
+              </div>
+            </div>
+          </template>
+
           <!-- ===== transfer modal ===== -->
           <template x-if="transferModalOpen">
             <div class="modal-overlay" @click.self="closeTransferModal()">
@@ -736,6 +772,73 @@
                 <button class="btn-q mag" :disabled="depositSaving" @click="saveDeposit()">
                   <span x-text="depositSaving ? 'Opening…' : 'Open deposit'"></span>
                 </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- ===== unresolved mail nudge ===== -->
+          <template x-if="unresolvedNudge">
+            <div class="modal-overlay" @click.self="dismissUnresolvedNudge()">
+              <div class="modal-panel col g-8">
+                <div class="row">
+                  <span class="sub-h" style="color:#ff8800;">
+                    ⚠ Unanswered mail
+                  </span>
+                  <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          @click="dismissUnresolvedNudge()">Close</button>
+                </div>
+
+                <p class="text-xs dim">
+                  You have <span x-text="unresolvedNudge.length"></span> unresolved message<span x-text="unresolvedNudge.length === 1 ? '' : 's'"></span>.
+                  Sleep anyway and the situation handles itself — badly.
+                </p>
+
+                <div class="col g-6">
+                  <template x-for="item in unresolvedNudge" :key="item.event.event_id">
+                    <div class="card-tight col g-4"
+                         style="background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;">
+                      <div class="row">
+                        <span class="text-sm truncate" x-text="item.event.event.title"></span>
+                      </div>
+                      <span class="text-xs dim" x-text="'You end up: ' + item.option.label"></span>
+                      <div class="col g-4">
+                        <template x-if="!Object.keys(item.option.effects_on_failure || {}).length">
+                          <span class="text-xs dim">No effect.</span>
+                        </template>
+                        <template x-for="fx in Object.entries(item.option.effects_on_failure || {})" :key="fx[0]">
+                          <div class="row text-xs">
+                            <span class="capitalize" x-text="fx[0]"></span>
+                            <span :class="fx[1] >= 0 ? 'neon' : 'text-[color:var(--danger)]'"
+                                  x-text="fx[0] === 'money' ? ((fx[1] >= 0 ? '+' : '') + moneyBig(fx[1])) : ((fx[1] >= 0 ? '+' : '') + fx[1])"></span>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="row g-4" style="gap:6px">
+                  <button class="btn-q mag" style="flex:1" @click="goToInboxFromNudge()">Go to Inbox</button>
+                  <button class="btn-q warn" style="flex:1" @click="sleepAnyway()">Sleep anyway</button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- ===== skill level up popup ===== -->
+          <template x-if="skillLevelUp">
+            <div class="lvlup-overlay" @click="clearTimeout(skillLevelUpTimer); skillLevelUp = null">
+              <div class="lvlup-stripe lvlup-stripe-1"></div>
+              <div class="lvlup-stripe lvlup-stripe-2"></div>
+              <div class="lvlup-content">
+                <div class="lvlup-title pixel">
+                  <span x-text="skillLevelUp.skill.toUpperCase()"></span> LVL UP
+                </div>
+                <div class="lvlup-row">
+                  <span class="lvlup-num pixel" x-text="skillLevelUp.from"></span>
+                  <img src="{% static 'img/icon_arrow_right.png' %}" alt="→" class="lvlup-arrow" />
+                  <span class="lvlup-num lvlup-num-new pixel" x-text="skillLevelUp.to"></span>
+                </div>
               </div>
             </div>
           </template>
