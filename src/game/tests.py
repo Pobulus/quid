@@ -530,6 +530,56 @@ class FinanceTest(TestCase):
         with self.assertRaises(ValueError):
             finance.transfer(s, "sideways", 100)
 
+    # ---- T3.20: pay_credit_card ----
+
+    def _cc_state(self, balance=50000, checking=200000, min_pct=0.10):
+        s = new_game(seed=1)
+        s.accounts.checking = checking
+        s.credit_card = CreditCard(
+            limit=100000, balance=balance, apr=0.24,
+            due_day=25, min_payment_pct=min_pct,
+        )
+        s.flags.pop("cc_payments_made", None)
+        return s
+
+    def test_pay_credit_card_full_success(self):
+        s = self._cc_state(balance=50000, checking=200000)
+        s, msg = finance.pay_credit_card(s, 50000)
+        self.assertEqual(s.credit_card.balance, 0)
+        self.assertEqual(s.accounts.checking, 150000)
+        self.assertEqual(s.flags.get("cc_payments_made"), 1)
+        self.assertIn("CC payment", msg)
+
+    def test_pay_credit_card_partial_below_min_does_not_bump_history(self):
+        # balance 50000 × min_pct 0.10 = 5000. Pay 1000 (below min).
+        s = self._cc_state(balance=50000, checking=200000, min_pct=0.10)
+        s, _ = finance.pay_credit_card(s, 1000)
+        self.assertEqual(s.credit_card.balance, 49000)
+        self.assertIsNone(s.flags.get("cc_payments_made"))
+
+    def test_pay_credit_card_rejects_no_card(self):
+        s = new_game(seed=1)
+        s.credit_card = None
+        with self.assertRaises(ValueError):
+            finance.pay_credit_card(s, 1000)
+
+    def test_pay_credit_card_rejects_over_balance(self):
+        s = self._cc_state(balance=50000)
+        with self.assertRaises(ValueError):
+            finance.pay_credit_card(s, 60000)
+
+    def test_pay_credit_card_rejects_over_checking(self):
+        s = self._cc_state(balance=50000, checking=1000)
+        with self.assertRaises(ValueError):
+            finance.pay_credit_card(s, 50000)
+
+    def test_pay_credit_card_rejects_non_positive(self):
+        s = self._cc_state()
+        with self.assertRaises(ValueError):
+            finance.pay_credit_card(s, 0)
+        with self.assertRaises(ValueError):
+            finance.pay_credit_card(s, -5)
+
     def test_apply_for_credit_card_starter_unlocks_and_seeds_calendar(self):
         s = new_game(seed=1)
         s.credit_score = 620

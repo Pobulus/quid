@@ -154,6 +154,9 @@ function quid() {
     transferModalOpen: false,
     transferDraft: { direction: "to_savings", amount_pln: 0 },
     transferSaving: false,
+    ccPayModalOpen: false,
+    ccPayDraft: { amount_pln: 0 },
+    ccPaySaving: false,
     loanModalOpen: false,
     loanDraft: { kind: "personal", amount_pln: 0 },
     loanSaving: false,
@@ -814,6 +817,61 @@ function quid() {
         this.showToast("Network error.");
       } finally {
         this.transferSaving = false;
+      }
+    },
+
+    // ---- credit card payment (T3.20) ----
+
+    openCcPayModal() {
+      if (!this.state?.credit_card) return;
+      const balancePln = this.state.credit_card.balance / 100;
+      const checkingPln = this.checking / 100;
+      this.ccPayDraft = { amount_pln: Math.min(balancePln, checkingPln) };
+      this.ccPayModalOpen = true;
+    },
+
+    closeCcPayModal() {
+      if (this.ccPaySaving) return;
+      this.ccPayModalOpen = false;
+    },
+
+    async payCreditCardFull() {
+      if (!this.state?.credit_card) return;
+      const amount = this.state.credit_card.balance;
+      if (amount <= 0) return;
+      if (amount > this.checking) { this.showToast("Not enough in checking."); return; }
+      if (!confirm(`Pay ${fmtMoney(amount)} to clear the card?`)) return;
+      await this._submitCcPay(amount);
+    },
+
+    async saveCcPay() {
+      if (this.ccPaySaving) return;
+      const pln = Number(this.ccPayDraft.amount_pln) || 0;
+      const amount = Math.round(pln * 100);
+      if (amount <= 0) { this.showToast("Enter a positive amount."); return; }
+      await this._submitCcPay(amount);
+    },
+
+    async _submitCcPay(amount) {
+      this.ccPaySaving = true;
+      try {
+        const r = await fetch("/api/cc-pay", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: this.state, amount }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.showToast(data.detail || `Error ${r.status} from /api/cc-pay.`);
+          return;
+        }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.ccPayModalOpen = false;
+        this.showToast(data.message || "CC payment complete.");
+      } catch (_) {
+        this.showToast("Network error.");
+      } finally {
+        this.ccPaySaving = false;
       }
     },
 
