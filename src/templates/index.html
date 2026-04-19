@@ -290,12 +290,10 @@
                   <span :class="state.actions_today > 0 ? 'pill' : 'pill dim'"
                         x-text="state.actions_today > 0 ? 'Available' : 'Used'"></span>
                 </div>
-                <button class="btn-q"
-                        :disabled="state.actions_today === 0"
-                        @click="rest()">
-                  Rest
+                <button class="btn-q mag" @click="advanceDay()">
+                  Go to sleep
                 </button>
-                <p class="text-xs dim">Recovers sanity and energy. Consumes today's action.</p>
+                <p class="text-xs dim">End the day. If you didn't spend your action, you'll recover sanity and energy overnight.</p>
               </div>
             </section>
 

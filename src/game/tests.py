@@ -665,3 +665,23 @@ class EventsTest(TestCase):
         before = s.player.workdays_this_month
         s, _ = events.advance_day(s)
         self.assertEqual(s.player.workdays_this_month, before)
+
+    def test_advance_day_applies_passive_rest_when_action_unspent(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 10**9
+        s.player.stats["sanity"] = 40
+        s.player.stats["energy"] = 30
+        s.actions_today = 1  # not spent
+        s, _ = events.advance_day(s)
+        self.assertEqual(s.player.stats["sanity"], 40 + B.REST_SANITY)
+        self.assertEqual(s.player.stats["energy"], 30 + B.REST_ENERGY)
+
+    def test_advance_day_skips_passive_rest_when_action_spent(self):
+        s = new_game(seed=1)
+        s.accounts.checking = 10**9
+        s.player.stats["sanity"] = 40
+        s.player.stats["energy"] = 30
+        s.actions_today = 0  # already used
+        s, _ = events.advance_day(s)
+        self.assertEqual(s.player.stats["sanity"], 40)
+        self.assertEqual(s.player.stats["energy"], 30)
