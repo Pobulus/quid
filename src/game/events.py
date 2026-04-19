@@ -324,6 +324,16 @@ def advance_day(state: GameState) -> tuple[GameState, list[str]]:
 
     logs.extend(_fire_calendar_for_today(state))
 
+    # Passive rest (T3.18): if the player didn't spend today's action slot, they slept.
+    if state.actions_today > 0:
+        state.player.stats["sanity"] = min(
+            B.STAT_MAX, state.player.stats["sanity"] + B.REST_SANITY
+        )
+        state.player.stats["energy"] = min(
+            B.STAT_MAX, state.player.stats["energy"] + B.REST_ENERGY
+        )
+        logs.append(f"Slept — +{B.REST_SANITY} sanity, +{B.REST_ENERGY} energy")
+
     # Advance pointers
     state.day += 1
     state.day_of_week = (state.day_of_week + 1) % 7
