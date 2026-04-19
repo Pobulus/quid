@@ -186,6 +186,18 @@
                     <span x-text="'Due day ' + state.credit_card.due_day"></span>
                     <span x-text="'Min ' + Math.round(state.credit_card.min_payment_pct * 100) + '%'"></span>
                   </div>
+                  <div class="row g-4" style="gap:6px">
+                    <button class="btn-q"
+                            :disabled="state.credit_card.balance <= 0 || checking < state.credit_card.balance"
+                            @click="payCreditCardFull()">
+                      Pay in full
+                    </button>
+                    <button class="btn-q mag"
+                            :disabled="state.credit_card.balance <= 0 || checking <= 0"
+                            @click="openCcPayModal()">
+                      Pay extra…
+                    </button>
+                  </div>
                 </div>
               </template>
 
@@ -553,6 +565,40 @@
 
                 <button class="btn-q mag" :disabled="transferSaving" @click="saveTransfer()">
                   <span x-text="transferSaving ? 'Transferring…' : 'Transfer'"></span>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- ===== CC payment modal (T3.20) ===== -->
+          <template x-if="ccPayModalOpen">
+            <div class="modal-overlay" @click.self="closeCcPayModal()">
+              <div class="modal-panel col g-8">
+                <div class="row">
+                  <span class="sub-h">Pay credit card</span>
+                  <button class="btn-q muted" style="padding: 4px 8px; font-size: 8px;"
+                          @click="closeCcPayModal()">Close</button>
+                </div>
+
+                <div class="col g-4">
+                  <div class="row text-xs">
+                    <span class="dim">Balance</span>
+                    <span x-text="state.credit_card ? money(state.credit_card.balance) : '—'"></span>
+                  </div>
+                  <div class="row text-xs">
+                    <span class="dim">Checking</span>
+                    <span x-text="money(checking)"></span>
+                  </div>
+                </div>
+
+                <div class="col g-4">
+                  <span class="text-xs dim">Amount (PLN)</span>
+                  <input type="number" min="0" step="0.01" class="budget-input"
+                         x-model.number="ccPayDraft.amount_pln" />
+                </div>
+
+                <button class="btn-q mag" :disabled="ccPaySaving" @click="saveCcPay()">
+                  <span x-text="ccPaySaving ? 'Paying…' : 'Pay'"></span>
                 </button>
               </div>
             </div>

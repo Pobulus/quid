@@ -126,6 +126,20 @@ def apply_cc(request, payload: dict = Body(...)):
     return _out(state, message=msg)
 
 
+@api.post("/cc-pay")
+def cc_pay(request, payload: dict = Body(...)):
+    state = _load(payload)
+    try:
+        amount = int(payload.get("amount", 0))
+    except (TypeError, ValueError):
+        raise HttpError(400, "amount must be an integer (grosze)")
+    try:
+        state, msg = finance.pay_credit_card(state, amount)
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    return _out(state, message=msg)
+
+
 # ---- SAGE (mock) ----------------------------------------------------------------
 
 

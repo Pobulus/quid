@@ -157,6 +157,32 @@ def charge_credit_card_bill(state: GameState) -> tuple[GameState, str]:
     return state, "CC min payment MISSED (insufficient funds)"
 
 
+def pay_credit_card(state: GameState, amount: int) -> tuple[GameState, str]:
+    """Player-initiated CC payment. Extra / full payoff.
+
+    `flags.cc_payments_made` is only incremented when the payment covers the
+    current statement minimum — partial payments below that don't game the
+    on-time-history slice of `update_credit_score`.
+    """
+    cc = state.credit_card
+    if cc is None:
+        raise ValueError("No credit card on file.")
+    if not isinstance(amount, int) or amount <= 0:
+        raise ValueError("Amount must be a positive integer (grosze).")
+    if amount > cc.balance:
+        raise ValueError("Amount exceeds the card balance.")
+    if amount > state.accounts.checking:
+        raise ValueError("Not enough in checking to cover this payment.")
+    min_payment = max(1, int(cc.balance * cc.min_payment_pct))
+    state.accounts.checking -= amount
+    cc.balance -= amount
+    if amount >= min_payment:
+        state.flags.setdefault("cc_payments_made", 0)
+        state.flags["cc_payments_made"] += 1
+    _record_expense(state, "CC payment", amount)
+    return state, f"CC payment: -{amount/100:.2f} PLN"
+
+
 def make_loan_payment(state: GameState, loan_index: int) -> tuple[GameState, str]:
     if loan_index < 0 or loan_index >= len(state.loans):
         return state, "invalid loan id"
