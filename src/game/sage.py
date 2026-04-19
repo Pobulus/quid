@@ -20,12 +20,15 @@ prompt enforces that contract by example.
 from __future__ import annotations
 
 import json
+import logging
 import random
 import uuid
 from typing import Any, Callable, Optional
 
 import requests
 from django.conf import settings
+
+log = logging.getLogger("quid.sage")
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from game import balance as B
@@ -400,6 +403,14 @@ def _validate_single(raw: Any) -> dict:
     """Parse and validate one LLM-returned event. Assigns a fresh event_id."""
     if isinstance(raw, str):
         raw = json.loads(raw)
+    # Gemma occasionally ignores "one object" and returns a single-item array
+    # or wraps the event under a top-level key like {"event": {...}}. Unwrap.
+    if isinstance(raw, list):
+        if len(raw) != 1 or not isinstance(raw[0], dict):
+            raise ValueError(f"expected single-object array, got list of {len(raw)}")
+        raw = raw[0]
+    if isinstance(raw, dict) and set(raw.keys()) == {"event"} and isinstance(raw["event"], dict):
+        raw = raw["event"]
     if not isinstance(raw, dict):
         raise ValueError(f"expected JSON object, got {type(raw).__name__}")
     ev = validate_event(raw)
@@ -437,10 +448,14 @@ def generate_single_event_via_llm(
             return ev, ("llm" if attempt == 0 else "llm_retry")
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             last_error = str(e)
+            log.warning("SAGE LLM validation failed (attempt %d): %s", attempt + 1, e)
+            log.debug("SAGE LLM raw response: %r", locals().get("raw"))
         except Exception as e:
             last_error = f"transport: {e}"
+            log.warning("SAGE LLM transport error (attempt %d): %s", attempt + 1, e)
             break
 
+    log.warning("SAGE falling back to fixture — last_error=%s", last_error)
     return generate_event(state, rng=rng), "fallback"
 
 
@@ -465,7 +480,7 @@ def generate_event_via_llm(
 # ---- Ollama HTTP client (B2) ----------------------------------------------------
 
 
-OLLAMA_TIMEOUT_S = 30
+OLLAMA_TIMEOUT_S = getattr(settings, "OLLAMA_TIMEOUT_S", 120)
 
 
 def call_ollama(system: str, user: str) -> Any:

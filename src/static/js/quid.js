@@ -204,6 +204,7 @@ function quid() {
     skillLevelUpTimer: null,
     unresolvedNudge: null,    // [{ event, option }] when blocking sleep on unanswered mail
     prefetching: false,       // guard: only one /api/sage/prefetch in flight at a time
+    sageLoading: false,       // foreground SAGE call in flight — drives the thinking spinner
 
     statList: ["health","hunger","sanity","energy"].map(k => ({ key: k, icon: STAT_ICONS[k] })),
     skillList: ["cooking","handiwork","charisma","physique"].map(k => ({ key: k, icon: SKILL_ICONS[k] })),
@@ -583,32 +584,49 @@ function quid() {
     // Endpoint is slow (single-event Ollama generation), so we never block the
     // UI on it — errors are swallowed and retried next tick.
     async prefetchEvent() {
-      if (!this.state || this.prefetching) return;
+      // Don't race a foreground SAGE call: Ollama serializes, and the
+      // foreground response would clobber state.flags.event_queue anyway.
+      if (!this.state || this.prefetching || this.sageLoading) return;
       const queue = (this.state.flags && this.state.flags.event_queue) || [];
       if (queue.length >= PREFETCH_TARGET) return;
-      this.prefetching = true;
+      this.prefetching = this._runPrefetchOnce();
+      try {
+        await this.prefetching;
+      } finally {
+        this.prefetching = false;
+      }
+      // Keep topping up until we hit the target (guard re-entry via the flag).
+      if (this.state && !this.sageLoading) {
+        const q2 = (this.state.flags && this.state.flags.event_queue) || [];
+        if (q2.length < PREFETCH_TARGET) {
+          setTimeout(() => this.prefetchEvent(), 0);
+        }
+      }
+    },
+
+    // Single /api/sage/prefetch round-trip. Exposed as a stored promise so a
+    // concurrent foreground advance can piggy-back on the in-flight generation
+    // instead of starting a fresh one (Ollama is serial — a new call would wait
+    // behind this one anyway).
+    async _runPrefetchOnce() {
       try {
         const r = await fetch("/api/sage/prefetch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ state: this.state }),
         });
-        if (!r.ok) return;
+        if (!r.ok) return null;
         const data = await r.json();
-        if (!data || !data.event) return;
-        if (!this.state) return;
+        if (!data || !data.event) return null;
+        if (!this.state) return data.event;
         if (!this.state.flags) this.state.flags = {};
         const q = this.state.flags.event_queue || [];
         q.push(data.event);
         this.state.flags.event_queue = q;
         this.save();
-        if ((this.state.flags.event_queue.length) < PREFETCH_TARGET) {
-          setTimeout(() => this.prefetchEvent(), 0);
-        }
+        return data.event;
       } catch (_) {
-        // network errors are fine — the queue just doesn't fill this round
-      } finally {
-        this.prefetching = false;
+        return null;
       }
     },
 
@@ -740,8 +758,16 @@ function quid() {
     },
     async advanceUntilEvent() {
       const before = this.dateSnapshot();
-      this.prefetchEvent();
-      const data = await this.postAction("/api/advance-until-event");
+      this.sageLoading = true;
+      // Only wait for an in-flight prefetch if the queue is empty — otherwise
+      // the server already has something to drain and we'd just be stalling.
+      const queueEmpty = !((this.state.flags && this.state.flags.event_queue) || []).length;
+      if (queueEmpty && this.prefetching) {
+        try { await this.prefetching; } catch (_) {}
+      }
+      const data = await this.postAction("/api/advance-until-event").finally(() => {
+        this.sageLoading = false;
+      });
       if (data && data.reason === "budget_required") {
         this.triggerDayAdvanceAnim(before);
         this.openRequiredBudgetModal();
@@ -767,15 +793,31 @@ function quid() {
       } else {
         this.showToast("Quiet days passed.");
       }
+      // Resume any prefetch that was suppressed while sageLoading was true.
+      this.prefetchEvent();
     },
     async summonEvent() {
       // Explicit "spawn an event now" — bound to the Email empty-state CTA.
-      const data = await this.postAction("/api/sage/event", { force: true });
+      this.sageLoading = true;
+      const queueEmpty = !((this.state.flags && this.state.flags.event_queue) || []).length;
+      if (queueEmpty && this.prefetching) {
+        try { await this.prefetching; } catch (_) {}
+      }
+      const data = await this.postAction("/api/sage/event", { force: true })
+        .finally(() => { this.sageLoading = false; });
       if (data && data.event) {
         this.openEventId = data.event.event_id;
         this.lastResolution = null;
         this.prefetchEvent();
       }
+    },
+
+    // Dev: kick prefetch manually (top up `flags.event_queue`).
+    devPrefetch() {
+      if (!this.state) return;
+      const q = (this.state.flags && this.state.flags.event_queue) || [];
+      this.showToast(`Prefetching… (queue: ${q.length})`);
+      this.prefetchEvent();
     },
     async rest()              { await this.postAction("/api/rest"); },
     async practiceSkill(skill){

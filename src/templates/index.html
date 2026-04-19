@@ -357,7 +357,7 @@
 
               <div class="card col g-6">
                 <div class="row">
-                  <span class="sub-h">Daily action</span>
+                  <span class="sub-h">Sleep</span>
                   <span :class="state.actions_today > 0 ? 'pill' : 'pill dim'"
                         x-text="state.actions_today > 0 ? 'Available' : 'Used'"></span>
                 </div>
@@ -908,6 +908,17 @@
             </div>
           </template>
 
+          <!-- ===== SAGE thinking spinner ===== -->
+          <template x-if="sageLoading">
+            <div class="sage-loading">
+              <div class="sage-mascot-wrap">
+                <div class="sage-spinner"></div>
+                <img src="{% static 'img/sage.png' %}" alt="SAGE" class="sage-mascot" />
+              </div>
+              <span class="pixel text-[10px] neon">SAGE is thinking…</span>
+            </div>
+          </template>
+
           <!-- ===== game over ===== -->
           <template x-if="state.game_over">
             <div class="game-over-overlay">
@@ -954,6 +965,7 @@
     <button @click="newDemoGame()">demo</button>
     <button @click="loadFakeState()">load fake</button>
     <button @click="cheatMoney()" x-show="state">+1000 PLN</button>
+    <button @click="devPrefetch()" x-show="state" :disabled="prefetching">prefetch</button>
     <button @click="exportSave()" x-show="state">export</button>
     <button @click="triggerImport()">import</button>
     <input type="file" x-ref="importFile" @change="importSave($event)" accept="application/json,.json" style="display:none" />
