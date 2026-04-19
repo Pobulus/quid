@@ -3,8 +3,8 @@
    Server endpoints return { state, ... }; we replace localStorage wholesale.
    Endpoints not yet wired: catch and surface a toast. */
 
-const SCHEMA_VERSION = 1;
-const STORAGE_KEY = "quid.state.v1";
+const SCHEMA_VERSION = 2;
+const STORAGE_KEY = "quid.state.v2";
 const PREFETCH_TARGET = 3;  // keep at least this many pre-generated events buffered
 
 // Low-stat warning thresholds. Crossing `LOW` downward fires a one-shot modal;
@@ -61,6 +61,26 @@ const HOUSE_LABELS = {
   decent_rental:  "Decent rental",
   nice_rental:    "Nice rental",
 };
+
+// Mirror of balance.HOUSE_TIERS — used by the move modal to preview rent/stats
+// and compute move costs client-side. Keep in sync with src/game/balance.py.
+const HOUSE_TIERS = {
+  shoddy_rental: { rent: 180000, shoddiness: 6, durability: 4, distance_to_work_km: 12 },
+  decent_rental: { rent: 260000, shoddiness: 3, durability: 6, distance_to_work_km: 6 },
+  nice_rental:   { rent: 380000, shoddiness: 1, durability: 8, distance_to_work_km: 3 },
+};
+const HOUSE_TIER_ORDER = ["shoddy_rental", "decent_rental", "nice_rental"];
+const MOVE_UPGRADE_FEE = 50000;
+const MOVE_DOWNGRADE_FEE = 30000;
+const DEPOSIT_RENT_MULTIPLIER = 2;
+const MOVE_UNLOCK_KEY = {
+  decent_rental: "move_decent_rental",
+  nice_rental:   "move_nice_rental",
+};
+
+// Mirror of balance.DEPOSIT_TERMS / DEPOSIT_MONTHLY_RATE — keep in sync.
+const DEPOSIT_TERMS = [3, 6, 12];
+const DEPOSIT_MONTHLY_RATE_PCT = 0.6;
 
 const HOUSE_FLAVOR = {
   shoddy_rental:
@@ -157,6 +177,13 @@ function quid() {
     ccPayModalOpen: false,
     ccPayDraft: { amount_pln: 0 },
     ccPaySaving: false,
+    moveModalOpen: false,
+    moveSaving: false,
+    depositModalOpen: false,
+    depositDraft: { amount_pln: 0, term_months: 3 },
+    depositSaving: false,
+    DEPOSIT_TERMS: DEPOSIT_TERMS,
+    DEPOSIT_MONTHLY_RATE_PCT: DEPOSIT_MONTHLY_RATE_PCT,
     loanModalOpen: false,
     loanDraft: { kind: "personal", amount_pln: 0 },
     loanSaving: false,
@@ -820,6 +847,68 @@ function quid() {
       }
     },
 
+    // ---- house move (T3.21) ----
+
+    houseTierOrder() { return HOUSE_TIER_ORDER; },
+    moveTierInfo(tier) { return HOUSE_TIERS[tier]; },
+
+    openMoveModal() { this.moveModalOpen = true; },
+    closeMoveModal() { if (!this.moveSaving) this.moveModalOpen = false; },
+
+    moveIsUpgrade(tier) {
+      const order = HOUSE_TIER_ORDER;
+      return order.indexOf(tier) > order.indexOf(this.state.house.tier);
+    },
+
+    moveCostDescription(tier) {
+      if (tier === this.state.house.tier) return '<span class="dim">Current residence.</span>';
+      if (this.moveIsUpgrade(tier)) {
+        const unlockKey = MOVE_UNLOCK_KEY[tier];
+        const cfg = HOUSE_TIERS[tier];
+        const deposit = DEPOSIT_RENT_MULTIPLIER * cfg.rent;
+        const total = MOVE_UPGRADE_FEE + deposit;
+        const unlocked = this.productStatus(unlockKey) === "active";
+        const unlockHint = unlocked
+          ? ""
+          : ` <span class="text-[color:var(--danger)]">(${this.productRequirement(unlockKey)})</span>`;
+        return `Fee ${fmtMoney(MOVE_UPGRADE_FEE)} + deposit ${fmtMoney(deposit)} = <strong>${fmtMoney(total)}</strong>${unlockHint}`;
+      }
+      const refund = (this.state.flags && this.state.flags.house_deposit_paid) || 0;
+      const net = MOVE_DOWNGRADE_FEE - refund;
+      return refund > 0
+        ? `Fee ${fmtMoney(MOVE_DOWNGRADE_FEE)}, refund ${fmtMoney(refund)} = net <strong>${fmtMoney(net)}</strong>`
+        : `Fee <strong>${fmtMoney(MOVE_DOWNGRADE_FEE)}</strong>`;
+    },
+
+    async confirmMove(tier) {
+      if (this.moveSaving) return;
+      const upgrade = this.moveIsUpgrade(tier);
+      const prompt = upgrade
+        ? `Move up to ${HOUSE_LABELS[tier]}? This charges the fee + deposit.`
+        : `Move down to ${HOUSE_LABELS[tier]}? Deposit (if any) is refunded.`;
+      if (!confirm(prompt)) return;
+      this.moveSaving = true;
+      try {
+        const r = await fetch("/api/move-house", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: this.state, target_tier: tier }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.showToast(data.detail || `Error ${r.status} from /api/move-house.`);
+          return;
+        }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.moveModalOpen = false;
+        this.showToast(data.message || "Moved.");
+      } catch (_) {
+        this.showToast("Network error.");
+      } finally {
+        this.moveSaving = false;
+      }
+    },
+
     // ---- credit card payment (T3.20) ----
 
     openCcPayModal() {
@@ -873,6 +962,95 @@ function quid() {
       } finally {
         this.ccPaySaving = false;
       }
+    },
+
+    // ---- savings tier + deposit (T3.22) ----
+
+    isUnlocked(key) {
+      return this.productStatus(key) === "active";
+    },
+
+    async setSavingsTier(tier) {
+      if (!this.state) return;
+      if (this.state.accounts.savings_tier === tier) return;
+      if (tier === "premium" && !this.isUnlocked("savings_premium")) {
+        this.showToast("Premium savings locked — raise net worth first.");
+        return;
+      }
+      try {
+        const r = await fetch("/api/savings-tier", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: this.state, tier }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showToast(data.detail || `Error ${r.status} from /api/savings-tier.`); return; }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.showToast(data.message || `Savings tier: ${tier}`);
+      } catch (_) { this.showToast("Network error."); }
+    },
+
+    openDepositModal() {
+      if (!this.isUnlocked("deposit")) {
+        this.showToast("Deposits locked — raise net worth first.");
+        return;
+      }
+      if (this.state.accounts.deposit) {
+        this.showToast("A deposit is already open.");
+        return;
+      }
+      this.depositDraft = { amount_pln: this.savings / 100, term_months: 3 };
+      this.depositModalOpen = true;
+    },
+
+    closeDepositModal() {
+      if (this.depositSaving) return;
+      this.depositModalOpen = false;
+    },
+
+    async saveDeposit() {
+      if (this.depositSaving) return;
+      const pln = Number(this.depositDraft.amount_pln) || 0;
+      const amount = Math.round(pln * 100);
+      const term = this.depositDraft.term_months;
+      if (amount <= 0) { this.showToast("Enter a positive amount."); return; }
+      if (!DEPOSIT_TERMS.includes(term)) { this.showToast("Pick a term."); return; }
+      this.depositSaving = true;
+      try {
+        const r = await fetch("/api/deposit/open", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: this.state, amount, term_months: term }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showToast(data.detail || `Error ${r.status} from /api/deposit/open.`); return; }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.depositModalOpen = false;
+        this.showToast(data.message || "Deposit opened.");
+      } catch (_) { this.showToast("Network error."); }
+      finally { this.depositSaving = false; }
+    },
+
+    async closeDeposit() {
+      if (!this.state?.accounts?.deposit) return;
+      const dep = this.state.accounts.deposit;
+      const monthsElapsed = this.state.month - dep.opened_month;
+      const early = monthsElapsed < dep.term_months;
+      const prompt = early
+        ? `Close early? 2% of ${fmtMoney(dep.principal)} will be forfeited as a penalty.`
+        : `Close deposit and release ${fmtMoney(dep.principal)} to savings?`;
+      if (!confirm(prompt)) return;
+      try {
+        const r = await fetch("/api/deposit/close", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: this.state }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showToast(data.detail || `Error ${r.status} from /api/deposit/close.`); return; }
+        if (data.state) { this.state = data.state; this.save(); }
+        this.showToast(data.message || "Deposit closed.");
+      } catch (_) { this.showToast("Network error."); }
     },
 
     // ---- save/export ----

@@ -126,6 +126,52 @@ def apply_cc(request, payload: dict = Body(...)):
     return _out(state, message=msg)
 
 
+@api.post("/move-house")
+def move_house(request, payload: dict = Body(...)):
+    state = _load(payload)
+    target = payload.get("target_tier")
+    try:
+        state, msg = finance.move_house(state, target)
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    return _out(state, message=msg)
+
+
+@api.post("/savings-tier")
+def savings_tier(request, payload: dict = Body(...)):
+    state = _load(payload)
+    try:
+        state, msg = finance.set_savings_tier(state, payload.get("tier"))
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    return _out(state, message=msg)
+
+
+@api.post("/deposit/open")
+def deposit_open(request, payload: dict = Body(...)):
+    state = _load(payload)
+    try:
+        amount = int(payload.get("amount", 0))
+        term = int(payload.get("term_months", 0))
+    except (TypeError, ValueError):
+        raise HttpError(400, "amount and term_months must be integers")
+    try:
+        state, msg = finance.open_deposit(state, amount, term)
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    return _out(state, message=msg)
+
+
+@api.post("/deposit/close")
+def deposit_close(request, payload: dict = Body(...)):
+    state = _load(payload)
+    try:
+        state, msg = finance.close_deposit(state)
+    except ValueError as e:
+        raise HttpError(400, str(e))
+    return _out(state, message=msg)
+
+
 @api.post("/cc-pay")
 def cc_pay(request, payload: dict = Body(...)):
     state = _load(payload)

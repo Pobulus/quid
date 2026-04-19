@@ -6,7 +6,7 @@ No I/O, no globals beyond `balance`. Money is always grosze (int).
 from __future__ import annotations
 
 from game import balance as B
-from game.state import CalendarEvent, CreditCard, GameState, Loan
+from game.state import CalendarEvent, CreditCard, Deposit, GameState, Loan
 
 
 def _clamp(v: int, lo: int, hi: int) -> int:
@@ -108,17 +108,25 @@ def apply_monthly_interest(state: GameState) -> tuple[GameState, list[str]]:
     """Applied at month rollover. Savings grows, loan balances grow, CC carried balance grows."""
     logs: list[str] = []
 
-    # Savings interest
+    # Savings interest — tier chosen explicitly via set_savings_tier (T3.22).
     if state.accounts.savings > 0:
         rate = (
             B.SAVINGS_PREMIUM_MONTHLY_RATE
-            if state.accounts.savings >= B.UNLOCK_TIERS["savings_premium"][1]
+            if state.accounts.savings_tier == "premium"
             else B.SAVINGS_BASIC_MONTHLY_RATE
         )
         gain = int(state.accounts.savings * rate)
         state.accounts.savings += gain
         if gain > 0:
             logs.append(f"Savings interest: +{gain/100:.2f} PLN")
+
+    # Fixed-term deposit accrues at a locked premium rate.
+    dep = state.accounts.deposit
+    if dep and dep.principal > 0:
+        dep_gain = int(dep.principal * B.DEPOSIT_MONTHLY_RATE)
+        dep.principal += dep_gain
+        if dep_gain > 0:
+            logs.append(f"Deposit interest: +{dep_gain/100:.2f} PLN")
 
     # Loan interest accrues on remaining
     for loan in state.loans:
@@ -288,6 +296,119 @@ def apply_for_credit_card(state: GameState, tier: str) -> tuple[GameState, str]:
             )
         )
     return state, f"Approved: {tier} credit card, limit {limit/100:.0f} PLN @ {apr*100:.0f}% APR"
+
+
+def set_savings_tier(state: GameState, tier: str) -> tuple[GameState, str]:
+    """Switch the savings account between basic and premium tiers."""
+    if tier not in B.SAVINGS_TIERS:
+        raise ValueError(f"unknown savings tier: {tier}")
+    if tier == "premium" and "savings_premium" not in available_products(state):
+        raise ValueError("savings_premium unlock requirements not met")
+    state.accounts.savings_tier = tier
+    return state, f"Savings tier set to {tier}."
+
+
+def open_deposit(
+    state: GameState, amount: int, term_months: int
+) -> tuple[GameState, str]:
+    """Open a fixed-term deposit. Moves `amount` grosze from savings into
+    `accounts.deposit` and stamps the current month."""
+    if "deposit" not in available_products(state):
+        raise ValueError("deposit unlock requirements not met")
+    if state.accounts.deposit is not None:
+        raise ValueError("A deposit is already open.")
+    if term_months not in B.DEPOSIT_TERMS:
+        raise ValueError(f"term_months must be one of {B.DEPOSIT_TERMS}")
+    if not isinstance(amount, int) or amount <= 0:
+        raise ValueError("Amount must be a positive integer (grosze).")
+    if amount > state.accounts.savings:
+        raise ValueError("Not enough in savings to open this deposit.")
+    state.accounts.savings -= amount
+    state.accounts.deposit = Deposit(
+        principal=amount, opened_month=state.month, term_months=term_months
+    )
+    return state, f"Deposit opened: {amount/100:.2f} PLN for {term_months} months."
+
+
+def close_deposit(state: GameState) -> tuple[GameState, str]:
+    """Close the deposit and release principal + accrued interest to savings.
+    If closed before term, a percentage of the current principal is forfeited."""
+    dep = state.accounts.deposit
+    if dep is None:
+        raise ValueError("No deposit is open.")
+    months_elapsed = state.month - dep.opened_month
+    if months_elapsed < dep.term_months:
+        penalty = int(dep.principal * B.DEPOSIT_EARLY_PENALTY_PCT)
+        payout = dep.principal - penalty
+        state.accounts.savings += payout
+        state.accounts.deposit = None
+        return state, (
+            f"Deposit closed early: -{penalty/100:.2f} PLN penalty, "
+            f"+{payout/100:.2f} PLN to savings."
+        )
+    payout = dep.principal
+    state.accounts.savings += payout
+    state.accounts.deposit = None
+    return state, f"Deposit matured: +{payout/100:.2f} PLN to savings."
+
+
+def move_house(state: GameState, target_tier: str) -> tuple[GameState, str]:
+    """Move to a different rental tier (upgrade or downgrade).
+
+    Upgrade: charges `MOVE_UPGRADE_FEE` + `DEPOSIT_RENT_MULTIPLIER × new rent`
+    from checking. Stores the paid deposit in `flags.house_deposit_paid` so a
+    later downgrade can refund it.
+    Downgrade: charges `MOVE_DOWNGRADE_FEE` and refunds the previously paid
+    deposit (if any) to checking.
+    Raises ValueError on unknown tier, same-tier moves, missing unlock (upgrade
+    only), or insufficient funds.
+    """
+    if target_tier not in B.HOUSE_TIERS:
+        raise ValueError(f"unknown house tier: {target_tier}")
+    current = state.house.tier
+    if target_tier == current:
+        raise ValueError("Already at that tier.")
+
+    order = B.HOUSE_TIER_ORDER
+    is_upgrade = order.index(target_tier) > order.index(current)
+    cfg = B.HOUSE_TIERS[target_tier]
+
+    if is_upgrade:
+        unlock_key = f"move_{target_tier.split('_rental')[0]}_rental"
+        if unlock_key not in available_products(state):
+            raise ValueError(f"{unlock_key} unlock requirements not met")
+        deposit = B.DEPOSIT_RENT_MULTIPLIER * cfg["rent"]
+        total_cost = B.MOVE_UPGRADE_FEE + deposit
+        if state.accounts.checking < total_cost:
+            raise ValueError("Not enough in checking to cover move-in cost.")
+        state.accounts.checking -= total_cost
+        prior_deposit = state.flags.get("house_deposit_paid", 0)
+        state.flags["house_deposit_paid"] = prior_deposit + deposit
+        _record_expense(state, f"Moving → {target_tier}", total_cost)
+        msg = (
+            f"Moved to {target_tier}: -{B.MOVE_UPGRADE_FEE/100:.0f} PLN fee, "
+            f"-{deposit/100:.0f} PLN deposit."
+        )
+    else:
+        if state.accounts.checking < B.MOVE_DOWNGRADE_FEE:
+            raise ValueError("Not enough in checking to cover moving fee.")
+        state.accounts.checking -= B.MOVE_DOWNGRADE_FEE
+        refund = state.flags.get("house_deposit_paid", 0)
+        if refund > 0:
+            state.accounts.checking += refund
+            state.flags["house_deposit_paid"] = 0
+        _record_expense(state, f"Moving → {target_tier}", B.MOVE_DOWNGRADE_FEE)
+        msg = (
+            f"Moved to {target_tier}: -{B.MOVE_DOWNGRADE_FEE/100:.0f} PLN fee"
+            + (f", +{refund/100:.0f} PLN deposit refund." if refund else ".")
+        )
+
+    state.house.tier = target_tier
+    state.house.monthly_rent = cfg["rent"]
+    state.house.shoddiness = cfg["shoddiness"]
+    state.house.durability = cfg["durability"]
+    state.house.distance_to_work_km = cfg["distance_to_work_km"]
+    return state, msg
 
 
 def take_bnpl(state: GameState, amount: int) -> tuple[GameState, str]:

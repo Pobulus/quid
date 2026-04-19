@@ -5,7 +5,7 @@ Money is in grosze (1 PLN = 100 grosze).
 
 from __future__ import annotations
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Demo mode: fixed seed so the opening run is deterministic for judges.
 DEMO_SEED = 13370420
@@ -120,6 +120,14 @@ HOUSE_TIERS = {
     },
 }
 
+HOUSE_TIER_ORDER = ["shoddy_rental", "decent_rental", "nice_rental"]
+
+# Moving costs (T3.21). Upgrades cost a deposit (2× new-tier rent) + moving fee;
+# downgrades refund the prior deposit but charge a smaller moving fee.
+MOVE_UPGRADE_FEE = 50000     # 500 PLN
+MOVE_DOWNGRADE_FEE = 30000   # 300 PLN
+DEPOSIT_RENT_MULTIPLIER = 2  # deposit = 2× new-tier monthly rent
+
 # Heating: months 1, 11, 12 = 3x; months 2, 10 = 2x; months 5–9 = 0.5x; rest 1x.
 HEATING_BASE = 25000  # 250 PLN
 HEATING_MONTH_MULTIPLIER = {
@@ -158,6 +166,9 @@ CREDIT_SCORE_MAX = 850
 SAVINGS_BASIC_MONTHLY_RATE = 0.001    # ~1.2% APR
 SAVINGS_PREMIUM_MONTHLY_RATE = 0.004  # ~5% APR
 DEPOSIT_MONTHLY_RATE = 0.006          # ~7.4% APR (locked)
+DEPOSIT_TERMS = (3, 6, 12)            # allowed term lengths in months
+DEPOSIT_EARLY_PENALTY_PCT = 0.02      # 2% of principal forfeited on early close
+SAVINGS_TIERS = ("basic", "premium")
 
 # ---- Unlock tiers ---------------------------------------------------------------
 # Each entry: (min_credit_score | None, min_net_worth_grosze | None)
